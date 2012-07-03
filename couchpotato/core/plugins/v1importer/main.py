@@ -61,7 +61,7 @@ class V1Importer(Plugin):
 
             downloaded = set(downloaded)
             for imdb in downloaded:
-		fireEvent('movie.add', {'identifier': imdb, status: 'done'}, single = True, search_after = False)
+                fireEvent('movie.add', {'identifier': imdb, status: 'done'}, single = True, search_after = False)
 
             message += ' and %s downloaded movie(s)' % len(downloaded)
 
@@ -76,7 +76,7 @@ class V1Importer(Plugin):
 
             deleted = set(deleted)
             for imdb in deleted:
-		fireEvent('movie.add', {'identifier': imdb, status: 'deleted'}, single = True, search_after = False)
+                fireEvent('movie.add', {'identifier': imdb, status: 'deleted'}, single = True, search_after = False)
 
             message += ' and %s deleted movie(s)' % len(deleted)
 
@@ -91,7 +91,7 @@ class V1Importer(Plugin):
 
             viewed = set(viewed)
             for imdb in viewed:
-		fireEvent('movie.add', {'identifier': imdb, status: 'viewed'}, single = True, search_after = False)
+                fireEvent('movie.add', {'identifier': imdb, status: 'viewed'}, single = True, search_after = False)
 
             message += ' and %s viewed movie(s)' % len(viewed)
 
@@ -107,7 +107,7 @@ class V1Importer(Plugin):
 
             snatched = set(snatched)
             for imdb in snatched:
-		fireEvent('movie.add', {'identifier': imdb, status: 'snatched'}, single = True, search_after = False)
+                fireEvent('movie.add', {'identifier': imdb, status: 'snatched'}, single = True, search_after = False)
 
             message += ' and %s snatched movie(s)' % len(snatched)
 
