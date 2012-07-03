@@ -20,6 +20,8 @@ log = CPLog(__name__)
 
 class Updater(Plugin):
 
+    available_notified = False
+
     def __init__(self):
 
         if Env.get('desktop'):
@@ -51,15 +53,31 @@ class Updater(Plugin):
 
     def autoUpdate(self):
         if self.check() and self.conf('automatic') and not self.updater.update_failed:
-            self.updater.doUpdate()
+            if self.updater.doUpdate():
+
+                # Notify before restarting
+                try:
+                    if self.conf('notification'):
+                        info = self.updater.info()
+                        version_date = datetime.fromtimestamp(info['update_version']['date'])
+                        fireEvent('updater.updated', 'Updated to a new version with hash "%s", this version is from %s' % (info['update_version']['hash'], version_date), data = info)
+                except:
+                    log.error('Failed notifying for update: %s', traceback.format_exc())
+
+                fireEventAsync('app.restart')
+
+                return True
+
+        return False
 
     def check(self):
         if self.isDisabled():
             return
 
         if self.updater.check():
-            if self.conf('notification') and not self.conf('automatic'):
+            if not self.available_notified and self.conf('notification') and not self.conf('automatic'):
                 fireEvent('updater.available', message = 'A new update is available', data = self.updater.info())
+                self.available_notified = True
             return True
 
         return False
@@ -157,17 +175,10 @@ class GitUpdater(BaseUpdater):
             self.repo.saveStash()
 
             log.info('Updating to latest version')
-            info = self.info()
             self.repo.pull()
 
             # Delete leftover .pyc files
             self.deletePyc()
-
-            # Notify before returning and restarting
-            version_date = datetime.fromtimestamp(info['update_version']['date'])
-            fireEvent('updater.updated', 'Updated to a new version with hash "%s", this version is from %s' % (info['update_version']['hash'], version_date), data = info)
-
-            fireEventAsync('app.restart')
 
             return True
         except:
@@ -260,8 +271,6 @@ class SourceUpdater(BaseUpdater):
             # Write update version to file
             self.createFile(self.version_file, json.dumps(self.update_version))
 
-            fireEventAsync('app.restart')
-
             return True
         except:
             log.error('Failed updating: %s', traceback.format_exc())
@@ -298,6 +307,13 @@ class SourceUpdater(BaseUpdater):
                             pass
                     except Exception, e:
                         log.error('Failed overwriting file: %s', e)
+
+        if Env.get('app_dir') not in Env.get('data_dir'):
+            for still_exists in existing_files:
+                try:
+                    os.remove(still_exists)
+                except:
+                    log.error('Failed removing non-used file: %s', traceback.format_exc())
 
 
     def removeDir(self, path):

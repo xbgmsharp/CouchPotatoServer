@@ -17,10 +17,13 @@ var Movie = new Class({
 		self.parent(self, options);
 
 		App.addEvent('movie.update.'+data.id, self.update.bind(self));
-		App.addEvent('movie.busy.'+data.id, function(notification){
-			if(notification.data)
-				self.busy(true)
-		});
+
+		['movie.busy', 'searcher.started'].each(function(listener){
+			App.addEvent(listener+'.'+data.id, function(notification){
+				if(notification.data)
+					self.busy(true)
+			});
+		})
 	},
 
 	busy: function(set_busy){
@@ -420,7 +423,7 @@ var ReleaseAction = new Class({
 				} catch(e){}
 
 				new Element('div', {
-					'class': 'item'
+					'class': 'item '+status.identifier
 				}).adopt(
 					new Element('span.name', {'text': self.get(release, 'name'), 'title': self.get(release, 'name')}),
 					new Element('span.status', {'text': status.identifier, 'class': 'release_status '+status.identifier}),
