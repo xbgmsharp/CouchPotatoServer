@@ -1,12 +1,14 @@
 from couchpotato import get_session
 from couchpotato.api import addApiView
 from couchpotato.core.event import fireEvent, addEvent
+from couchpotato.core.helpers.encoding import ss
 from couchpotato.core.helpers.request import getParam, jsonified
 from couchpotato.core.logger import CPLog
 from couchpotato.core.plugins.base import Plugin
 from couchpotato.core.plugins.scanner.main import Scanner
 from couchpotato.core.settings.model import File, Release as Relea, Movie
 from sqlalchemy.sql.expression import and_, or_
+import os
 
 log = CPLog(__name__)
 
@@ -22,7 +24,7 @@ class Release(Plugin):
                 'id': {'type': 'id', 'desc': 'ID of the release object in release-table'}
             }
         })
-        addApiView('release.delete', self.delete, docs = {
+        addApiView('release.delete', self.deleteView, docs = {
             'desc': 'Delete releases',
             'params': {
                 'id': {'type': 'id', 'desc': 'ID of the release object in release-table'}
@@ -34,6 +36,9 @@ class Release(Plugin):
                 'id': {'type': 'id', 'desc': 'ID of the release object in release-table'}
             }
         })
+
+        addEvent('release.delete', self.delete)
+        addEvent('release.clean', self.clean)
 
     def add(self, group):
         db = get_session()
@@ -83,8 +88,6 @@ class Release(Plugin):
 
         fireEvent('movie.restatus', movie.id)
 
-        #db.close()
-
         return True
 
 
@@ -99,20 +102,43 @@ class Release(Plugin):
         # Check database and update/insert if necessary
         return fireEvent('file.add', path = filepath, part = fireEvent('scanner.partnumber', file, single = True), type_tuple = Scanner.file_types.get(type), properties = properties, single = True)
 
-    def delete(self):
+    def deleteView(self):
+
+        release_id = getParam('id')
+
+        return jsonified({
+            'success': self.delete(release_id)
+        })
+
+    def delete(self, id):
 
         db = get_session()
-        id = getParam('id')
 
         rel = db.query(Relea).filter_by(id = id).first()
         if rel:
             rel.delete()
             db.commit()
+            return True
 
-        #db.close()
-        return jsonified({
-            'success': True
-        })
+        return False
+
+    def clean(self, id):
+
+        db = get_session()
+
+        rel = db.query(Relea).filter_by(id = id).first()
+        if rel:
+            for release_file in rel.files:
+                if not os.path.isfile(ss(release_file.path)):
+                    db.delete(release_file)
+            db.commit()
+
+            if len(rel.files) == 0:
+                self.delete(id)
+
+            return True
+
+        return False
 
     def ignore(self):
 
@@ -126,7 +152,6 @@ class Release(Plugin):
             rel.status_id = available_status.get('id') if rel.status_id is ignored_status.get('id') else ignored_status.get('id')
             db.commit()
 
-        #db.close()
         return jsonified({
             'success': True
         })
@@ -135,6 +160,7 @@ class Release(Plugin):
 
         db = get_session()
         id = getParam('id')
+        status_snatched = fireEvent('status.add', 'snatched', single = True)
 
         rel = db.query(Relea).filter_by(id = id).first()
         if rel:
@@ -143,24 +169,28 @@ class Release(Plugin):
                 item[info.identifier] = info.value
 
             # Get matching provider
-            provider = fireEvent('provider.belongs_to', item['url'], single = True)
-            item['download'] = provider.download
+            provider = fireEvent('provider.belongs_to', item['url'], provider = item.get('provider'), single = True)
 
-            fireEvent('searcher.download', data = item, movie = rel.movie.to_dict({
+            if item['type'] != 'torrent_magnet':
+                item['download'] = provider.download
+
+            success = fireEvent('searcher.download', data = item, movie = rel.movie.to_dict({
                 'profile': {'types': {'quality': {}}},
                 'releases': {'status': {}, 'quality': {}},
                 'library': {'titles': {}, 'files':{}},
                 'files': {}
-            }), manual = True)
+            }), manual = True, single = True)
 
-            #db.close()
+            if success:
+                rel.status_id = status_snatched.get('id')
+                db.commit()
+
             return jsonified({
-                'success': True
+                'success': success
             })
         else:
             log.error('Couldn\'t find release with id: %s', id)
 
-        #db.close()
         return jsonified({
             'success': False
         })

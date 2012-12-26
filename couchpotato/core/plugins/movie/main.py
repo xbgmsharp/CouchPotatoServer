@@ -3,7 +3,7 @@ from couchpotato.api import addApiView
 from couchpotato.core.event import fireEvent, fireEventAsync, addEvent
 from couchpotato.core.helpers.encoding import toUnicode, simplifyString
 from couchpotato.core.helpers.request import getParams, jsonified, getParam
-from couchpotato.core.helpers.variable import getImdb
+from couchpotato.core.helpers.variable import getImdb, splitString
 from couchpotato.core.logger import CPLog
 from couchpotato.core.plugins.base import Plugin
 from couchpotato.core.settings.model import Library, LibraryTitle, Movie
@@ -115,13 +115,18 @@ class MoviePlugin(Plugin):
     def get(self, movie_id):
 
         db = get_session()
-        m = db.query(Movie).filter_by(id = movie_id).first()
+
+        imdb_id = getImdb(str(movie_id))
+
+        if(imdb_id):
+            m = db.query(Movie).filter(Movie.library.has(identifier = imdb_id)).first()
+        else:
+            m = db.query(Movie).filter_by(id = movie_id).first()
 
         results = None
         if m:
             results = m.to_dict(self.default_dict)
 
-        #db.close()
         return results
 
     def list(self, status = ['active'], limit_offset = None, starts_with = None, search = None):
@@ -169,7 +174,7 @@ class MoviePlugin(Plugin):
             .options(joinedload_all('files'))
 
         if limit_offset:
-            splt = [x.strip() for x in limit_offset.split(',')]
+            splt = splitString(limit_offset)
             limit = splt[0]
             offset = 0 if len(splt) is 1 else splt[1]
             q2 = q2.limit(limit).offset(offset)
@@ -247,7 +252,7 @@ class MoviePlugin(Plugin):
 
         db = get_session()
 
-        for id in getParam('id').split(','):
+        for id in splitString(getParam('id')):
             movie = db.query(Movie).filter_by(id = id).first()
 
             if movie:
@@ -286,13 +291,27 @@ class MoviePlugin(Plugin):
             'movies': movies,
         })
 
-    def add(self, params = {}, force_readd = True, search_after = True):
+    def add(self, params = {}, force_readd = True, search_after = True, update_library = False):
 
         if not params.get('identifier'):
-            log.error('Can\'t add movie without imdb identifier.')
+            msg = 'Can\'t add movie without imdb identifier.'
+            log.error(msg)
+            fireEvent('notify.frontend', type = 'movie.is_tvshow', message = msg)
             return False
+        else:
+            try:
+                url = 'http://thetvdb.com/api/GetSeriesByRemoteID.php?imdbid=%s' % params.get('identifier')
+                tvdb = self.getCache('thetvdb.%s' % params.get('identifier'), url = url, show_error = False)
+                if tvdb and 'series' in tvdb.lower():
+                    msg = 'Can\'t add movie, seems to be a TV show.'
+                    log.error(msg)
+                    fireEvent('notify.frontend', type = 'movie.is_tvshow', message = msg)
+                    return False
+            except:
+                pass
 
-        library = fireEvent('library.add', single = True, attrs = params, update_after = False)
+
+        library = fireEvent('library.add', single = True, attrs = params, update_after = update_library)
 
         # Status
         status_active = fireEvent('status.add', 'active', single = True)
@@ -375,7 +394,7 @@ class MoviePlugin(Plugin):
 
         available_status = fireEvent('status.get', 'available', single = True)
 
-        ids = [x.strip() for x in params.get('id').split(',')]
+        ids = splitString(params.get('id'))
         for movie_id in ids:
 
             m = db.query(Movie).filter_by(id = movie_id).first()
@@ -411,7 +430,7 @@ class MoviePlugin(Plugin):
 
         params = getParams()
 
-        ids = [x.strip() for x in params.get('id').split(',')]
+        ids = splitString(params.get('id'))
         for movie_id in ids:
             self.delete(movie_id, delete_from = params.get('delete_from', 'all'))
 
@@ -425,9 +444,11 @@ class MoviePlugin(Plugin):
 
         movie = db.query(Movie).filter_by(id = movie_id).first()
         if movie:
+            deleted = False
             if delete_from == 'all':
                 db.delete(movie)
                 db.commit()
+                deleted = True
             else:
                 done_status = fireEvent('status.get', 'done', single = True)
 
@@ -450,6 +471,7 @@ class MoviePlugin(Plugin):
                 if total_releases == total_deleted:
                     db.delete(movie)
                     db.commit()
+                    deleted = True
                 elif new_movie_status:
                     new_status = fireEvent('status.get', new_movie_status, single = True)
                     movie.profile_id = None
@@ -457,6 +479,9 @@ class MoviePlugin(Plugin):
                     db.commit()
                 else:
                     fireEvent('movie.restatus', movie.id, single = True)
+
+            if deleted:
+                fireEvent('notify.frontend', type = 'movie.deleted', data = movie.to_dict())
 
         #db.close()
         return True

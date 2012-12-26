@@ -16,7 +16,7 @@
 
 """Blocking and non-blocking HTTP client implementations using pycurl."""
 
-from __future__ import with_statement
+from __future__ import absolute_import, division, with_statement
 
 import cStringIO
 import collections
@@ -27,20 +27,23 @@ import time
 
 from tornado import httputil
 from tornado import ioloop
+from tornado.log import gen_log
 from tornado import stack_context
 
 from tornado.escape import utf8
-from tornado.httpclient import HTTPRequest, HTTPResponse, HTTPError, AsyncHTTPClient, main
+from tornado.httpclient import HTTPRequest, HTTPResponse, HTTPError, AsyncHTTPClient, main, _RequestProxy
+
 
 class CurlAsyncHTTPClient(AsyncHTTPClient):
-    def initialize(self, io_loop=None, max_clients=10,
-                   max_simultaneous_connections=None):
+    def initialize(self, io_loop=None, max_clients=10, defaults=None):
         self.io_loop = io_loop
+        self.defaults = dict(HTTPRequest._DEFAULTS)
+        if defaults is not None:
+            self.defaults.update(defaults)
         self._multi = pycurl.CurlMulti()
         self._multi.setopt(pycurl.M_TIMERFUNCTION, self._set_timeout)
         self._multi.setopt(pycurl.M_SOCKETFUNCTION, self._handle_socket)
-        self._curls = [_curl_create(max_simultaneous_connections)
-                       for i in xrange(max_clients)]
+        self._curls = [_curl_create() for i in xrange(max_clients)]
         self._free_list = self._curls[:]
         self._requests = collections.deque()
         self._fds = {}
@@ -52,7 +55,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
             # socket_action is found in pycurl since 7.18.2 (it's been
             # in libcurl longer than that but wasn't accessible to
             # python).
-            logging.warning("socket_action method missing from pycurl; "
+            gen_log.warning("socket_action method missing from pycurl; "
                             "falling back to socket_all. Upgrading "
                             "libcurl and pycurl will improve performance")
             self._socket_action = \
@@ -77,6 +80,7 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
     def fetch(self, request, callback, **kwargs):
         if not isinstance(request, HTTPRequest):
             request = HTTPRequest(url=request, **kwargs)
+        request = _RequestProxy(request, self.defaults)
         self._requests.append((request, stack_context.wrap(callback)))
         self._process_queue()
         self._set_timeout(0)
@@ -109,15 +113,17 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         if self._timeout is not None:
             self.io_loop.remove_timeout(self._timeout)
         self._timeout = self.io_loop.add_timeout(
-            time.time() + msecs/1000.0, self._handle_timeout)
+            self.io_loop.time() + msecs / 1000.0, self._handle_timeout)
 
     def _handle_events(self, fd, events):
         """Called by IOLoop when there is activity on one of our
         file descriptors.
         """
         action = 0
-        if events & ioloop.IOLoop.READ: action |= pycurl.CSELECT_IN
-        if events & ioloop.IOLoop.WRITE: action |= pycurl.CSELECT_OUT
+        if events & ioloop.IOLoop.READ:
+            action |= pycurl.CSELECT_IN
+        if events & ioloop.IOLoop.WRITE:
+            action |= pycurl.CSELECT_OUT
         while True:
             try:
                 ret, num_handles = self._socket_action(fd, action)
@@ -250,7 +256,6 @@ class CurlAsyncHTTPClient(AsyncHTTPClient):
         except Exception:
             self.handle_callback_exception(info["callback"])
 
-
     def handle_callback_exception(self, callback):
         self.io_loop.handle_callback_exception(callback)
 
@@ -261,12 +266,11 @@ class CurlError(HTTPError):
         self.errno = errno
 
 
-def _curl_create(max_simultaneous_connections=None):
+def _curl_create():
     curl = pycurl.Curl()
-    if logging.getLogger().isEnabledFor(logging.DEBUG):
+    if gen_log.isEnabledFor(logging.DEBUG):
         curl.setopt(pycurl.VERBOSE, 1)
         curl.setopt(pycurl.DEBUGFUNCTION, _curl_debug)
-    curl.setopt(pycurl.MAXCONNECTS, max_simultaneous_connections or 5)
     return curl
 
 
@@ -372,7 +376,7 @@ def _curl_setup_request(curl, request, buffer, headers):
 
     # Handle curl's cryptic options for every individual HTTP method
     if request.method in ("POST", "PUT"):
-        request_buffer =  cStringIO.StringIO(utf8(request.body))
+        request_buffer = cStringIO.StringIO(utf8(request.body))
         curl.setopt(pycurl.READFUNCTION, request_buffer.read)
         if request.method == "POST":
             def ioctl(cmd):
@@ -387,14 +391,17 @@ def _curl_setup_request(curl, request, buffer, headers):
         userpwd = "%s:%s" % (request.auth_username, request.auth_password or '')
         curl.setopt(pycurl.HTTPAUTH, pycurl.HTTPAUTH_BASIC)
         curl.setopt(pycurl.USERPWD, utf8(userpwd))
-        logging.debug("%s %s (username: %r)", request.method, request.url,
+        gen_log.debug("%s %s (username: %r)", request.method, request.url,
                       request.auth_username)
     else:
         curl.unsetopt(pycurl.USERPWD)
-        logging.debug("%s %s", request.method, request.url)
+        gen_log.debug("%s %s", request.method, request.url)
 
-    if request.client_key is not None or request.client_cert is not None:
-        raise ValueError("Client certificate not supported with curl_httpclient")
+    if request.client_cert is not None:
+        curl.setopt(pycurl.SSLCERT, request.client_cert)
+
+    if request.client_key is not None:
+        curl.setopt(pycurl.SSLKEY, request.client_key)
 
     if threading.activeCount() > 1:
         # libcurl/pycurl is not thread-safe by default.  When multiple threads
@@ -420,15 +427,16 @@ def _curl_header_callback(headers, header_line):
         return
     headers.parse_line(header_line)
 
+
 def _curl_debug(debug_type, debug_msg):
     debug_types = ('I', '<', '>', '<', '>')
     if debug_type == 0:
-        logging.debug('%s', debug_msg.strip())
+        gen_log.debug('%s', debug_msg.strip())
     elif debug_type in (1, 2):
         for line in debug_msg.splitlines():
-            logging.debug('%s %s', debug_types[debug_type], line)
+            gen_log.debug('%s %s', debug_types[debug_type], line)
     elif debug_type == 4:
-        logging.debug('%s %r', debug_types[debug_type], debug_msg)
+        gen_log.debug('%s %r', debug_types[debug_type], debug_msg)
 
 if __name__ == "__main__":
     AsyncHTTPClient.configure(CurlAsyncHTTPClient)

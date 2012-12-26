@@ -62,6 +62,8 @@ var UpdaterBase = new Class({
 	createMessage: function(data){
 		var self = this;
 
+		if(self.message) return;
+
 		var changelog = 'https://github.com/'+data.repo_name+'/compare/'+data.version.hash+'...'+data.branch;
 		if(data.update_version.changelog)
 			changelog = data.update_version.changelog + '#' + data.version.hash+'...'+data.update_version.hash
@@ -88,17 +90,18 @@ var UpdaterBase = new Class({
 	doUpdate: function(){
 		var self = this;
 
+		App.blockPage('Please wait while CouchPotato is being updated with more awesome stuff.', 'Updating');
 		Api.request('updater.update', {
 			'onComplete': function(json){
-				if(json.success){
+				if(json.success)
 					self.updating();
-				}
+				else
+					App.unBlockPage()
 			}
 		});
 	},
 
 	updating: function(){
-		App.blockPage('Please wait while CouchPotato is being updated with more awesome stuff.', 'Updating');
 		App.checkAvailable.delay(500, App, [1000, function(){
 			window.location.reload();
 		}]);

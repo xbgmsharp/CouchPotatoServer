@@ -1,7 +1,7 @@
 from couchpotato.core.event import fireEvent
 from couchpotato.core.helpers.encoding import tryUrlencode
 from couchpotato.core.helpers.rss import RSS
-from couchpotato.core.helpers.variable import cleanHost
+from couchpotato.core.helpers.variable import cleanHost, splitString
 from couchpotato.core.logger import CPLog
 from couchpotato.core.providers.nzb.base import NZBProvider
 from couchpotato.environment import Env
@@ -25,13 +25,7 @@ class Newznab(NZBProvider, RSS):
 
     limits_reached = {}
 
-    cat_ids = [
-        ([2010], ['dvdr']),
-        ([2030], ['cam', 'ts', 'dvdrip', 'tc', 'r5', 'scr']),
-        ([2040], ['720p', '1080p']),
-        ([2050], ['bd50']),
-    ]
-    cat_backup_id = 2000
+    cat_backup_id = '2000'
 
     http_time_between_calls = 1 # Seconds
 
@@ -59,7 +53,7 @@ class Newznab(NZBProvider, RSS):
             'r': host['api_key'],
             'i': 58,
         })
-        url = "%s?%s" % (cleanHost(host['host']) + 'rss', arguments)
+        url = '%s?%s' % (cleanHost(host['host']) + 'rss', arguments)
         cache_key = 'newznab.%s.feed.%s' % (host['host'], arguments)
 
         results = self.createItems(url, cache_key, host, for_feed = True)
@@ -89,20 +83,19 @@ class Newznab(NZBProvider, RSS):
         cat_id = self.getCatId(quality['identifier'])
         arguments = tryUrlencode({
             'imdbid': movie['library']['identifier'].replace('tt', ''),
-            'cat': cat_id[0],
+            'cat': ','.join(cat_id),
             'apikey': host['api_key'],
             'extended': 1
         })
-        url = "%s&%s" % (self.getUrl(host['host'], self.urls['search']), arguments)
+        url = '%s&%s' % (self.getUrl(host['host'], self.urls['search']), arguments)
 
-        cache_key = 'newznab.%s.%s.%s' % (host['host'], movie['library']['identifier'], cat_id[0])
-        single_cat = (len(cat_id) == 1 and cat_id[0] != self.cat_backup_id)
+        cache_key = 'newznab.%s.%s.%s' % (host['host'], movie['library']['identifier'], cat_id)
 
-        results = self.createItems(url, cache_key, host, single_cat = single_cat, movie = movie, quality = quality)
+        results = self.createItems(url, cache_key, host, movie = movie, quality = quality)
 
         return results
 
-    def createItems(self, url, cache_key, host, single_cat = False, movie = None, quality = None, for_feed = False):
+    def createItems(self, url, cache_key, host, movie = None, quality = None, for_feed = False):
         results = []
 
         data = self.getCache(cache_key, url, cache_timeout = 1800, headers = {'User-Agent': Env.getIdentifier()})
@@ -118,35 +111,39 @@ class Newznab(NZBProvider, RSS):
                 results = []
                 for nzb in nzbs:
 
-                    date = ''
-                    size = 0
+                    date = None
                     for item in nzb:
-                        if item.attrib.get('name') == 'size':
-                            size = item.attrib.get('value')
-                        elif item.attrib.get('name') == 'usenetdate':
+                        if item.attrib.get('name') == 'usenetdate':
                             date = item.attrib.get('value')
+                            break
 
-                    if date is '': log.debug('Date not parsed properly or not available for %s: %s', (host['host'], self.getTextElement(nzb, "title")))
-                    if size is 0: log.debug('Size not parsed properly or not available for %s: %s', (host['host'], self.getTextElement(nzb, "title")))
+                    if not date:
+                        date = self.getTextElement(nzb, 'pubDate')
 
-                    id = self.getTextElement(nzb, "guid").split('/')[-1:].pop()
+                    nzb_id = self.getTextElement(nzb, 'guid').split('/')[-1:].pop()
+                    name = self.getTextElement(nzb, 'title')
+
+                    if not name:
+                        continue
+
                     new = {
-                        'id': id,
+                        'id': nzb_id,
                         'provider': self.getName(),
+                        'provider_extra': host['host'],
                         'type': 'nzb',
-                        'name': self.getTextElement(nzb, "title"),
+                        'name': self.getTextElement(nzb, 'title'),
                         'age': self.calculateAge(int(time.mktime(parse(date).timetuple()))),
-                        'size': int(size) / 1024 / 1024,
-                        'url': (self.getUrl(host['host'], self.urls['download']) % id) + self.getApiExt(host),
+                        'size': int(self.getElement(nzb, 'enclosure').attrib['length']) / 1024 / 1024,
+                        'url': (self.getUrl(host['host'], self.urls['download']) % nzb_id) + self.getApiExt(host),
                         'download': self.download,
-                        'detail_url': '%sdetails/%s' % (cleanHost(host['host']), id),
-                        'content': self.getTextElement(nzb, "description"),
+                        'detail_url': '%sdetails/%s' % (cleanHost(host['host']), nzb_id),
+                        'content': self.getTextElement(nzb, 'description'),
                     }
 
                     if not for_feed:
                         is_correct_movie = fireEvent('searcher.correct_movie',
                                                      nzb = new, movie = movie, quality = quality,
-                                                     imdb_results = True, single_category = single_cat, single = True)
+                                                     imdb_results = True, single = True)
 
                         if is_correct_movie:
                             new['score'] = fireEvent('score.calculate', new, movie, single = True)
@@ -162,9 +159,9 @@ class Newznab(NZBProvider, RSS):
 
     def getHosts(self):
 
-        uses = [x.strip() for x in str(self.conf('use')).split(',')]
-        hosts = [x.strip() for x in self.conf('host').split(',')]
-        api_keys = [x.strip() for x in self.conf('api_key').split(',')]
+        uses = splitString(str(self.conf('use')))
+        hosts = splitString(self.conf('host'))
+        api_keys = splitString(self.conf('api_key'))
 
         list = []
         for nr in range(len(hosts)):
@@ -176,16 +173,14 @@ class Newznab(NZBProvider, RSS):
 
         return list
 
-    def belongsTo(self, url):
+    def belongsTo(self, url, provider = None):
 
         hosts = self.getHosts()
 
         for host in hosts:
-            result = super(Newznab, self).belongsTo(url, host = host['host'])
+            result = super(Newznab, self).belongsTo(url, host = host['host'], provider = provider)
             if result:
                 return result
-
-        return
 
     def getUrl(self, host, type):
         return cleanHost(host) + 'api?t=' + type
@@ -221,4 +216,5 @@ class Newznab(NZBProvider, RSS):
                     return 'try_next'
 
             log.error('Failed download from %s', (host, traceback.format_exc()))
-            raise
+
+        return 'try_next'

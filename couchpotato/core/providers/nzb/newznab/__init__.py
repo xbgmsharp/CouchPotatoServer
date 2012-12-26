@@ -8,9 +8,12 @@ config = [{
     'groups': [
         {
             'tab': 'searcher',
-            'subtab': 'providers',
+            'subtab': 'nzb_providers',
             'name': 'newznab',
-            'description': 'Enable multiple NewzNab providers such as <a href="http://nzb.su" target="_blank">NZB.su</a> and <a href="http://nzbs.org" target="_blank">nzbs.org</a>',
+            'order': 10,
+            'description': 'Enable <a href="http://newznab.com/" target="_blank">NewzNab providers</a> such as <a href="https://nzb.su" target="_blank">NZB.su</a>, \
+                <a href="https://nzbs.org" target="_blank">NZBs.org</a>, <a href="http://dognzb.cr/" target="_blank">DOGnzb.cr</a>, \
+                <a href="https://github.com/spotweb/spotweb" target="_blank">Spotweb</a>',
             'wizard': True,
             'options': [
                 {

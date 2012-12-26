@@ -9,7 +9,7 @@ import socket
 import subprocess
 import sys
 import traceback
-
+import time
 
 # Root path
 base_path = dirname(os.path.abspath(__file__))
@@ -96,7 +96,11 @@ class Loader(object):
             except:
                 self.log.critical(traceback.format_exc())
 
-            args = [sys.executable] + [os.path.join(base_path, __file__)] + sys.argv[1:]
+            # Release log files and shutdown logger
+            logging.shutdown()
+            time.sleep(3)
+
+            args = [sys.executable] + [os.path.join(base_path, os.path.basename(__file__))] + sys.argv[1:]
             subprocess.Popen(args)
         except:
             self.log.critical(traceback.format_exc())

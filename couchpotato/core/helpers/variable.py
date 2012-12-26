@@ -1,3 +1,4 @@
+from couchpotato.core.helpers.encoding import simplifyString, toSafeString
 from couchpotato.core.logger import CPLog
 import hashlib
 import os.path
@@ -9,15 +10,34 @@ import sys
 
 log = CPLog(__name__)
 
+def getUserDir():
+    try:
+        import pwd
+        os.environ['HOME'] = pwd.getpwuid(os.geteuid()).pw_dir
+    except:
+        pass
+
+    return os.path.expanduser('~')
+
+def getDownloadDir():
+    user_dir = getUserDir()
+
+    # OSX
+    if 'darwin' in platform.platform().lower():
+        return os.path.join(user_dir, 'Downloads')
+
+    if os.name == 'nt':
+        return os.path.join(user_dir, 'Downloads')
+
+    return user_dir
+
 def getDataDir():
 
     # Windows
     if os.name == 'nt':
         return os.path.join(os.environ['APPDATA'], 'CouchPotato')
 
-    import pwd
-    os.environ['HOME'] = pwd.getpwuid(os.geteuid()).pw_dir
-    user_dir = os.path.expanduser('~')
+    user_dir = getUserDir()
 
     # OSX
     if 'darwin' in platform.platform().lower():
@@ -84,7 +104,7 @@ def cleanHost(host):
 
     return host
 
-def getImdb(txt, check_inside = True):
+def getImdb(txt, check_inside = True, multiple = False):
 
     if check_inside and os.path.isfile(txt):
         output = open(txt, 'r')
@@ -92,8 +112,10 @@ def getImdb(txt, check_inside = True):
         output.close()
 
     try:
-        id = re.findall('(tt\d{7})', txt)[0]
-        return id
+        ids = re.findall('(tt\d{7})', txt)
+        if multiple:
+            return ids if len(ids) > 0 else []
+        return ids[0]
     except IndexError:
         pass
 
@@ -101,11 +123,11 @@ def getImdb(txt, check_inside = True):
 
 def tryInt(s):
     try: return int(s)
-    except: return s
+    except: return 0
 
 def tryFloat(s):
     try: return float(s) if '.' in s else tryInt(s)
-    except: return s
+    except: return 0
 
 def natsortKey(s):
     return map(tryInt, re.findall(r'(\d+|\D+)', s))
@@ -118,12 +140,32 @@ def getTitle(library_dict):
         try:
             return library_dict['titles'][0]['title']
         except:
-            log.error('Could not get title for %s', library_dict['identifier'])
-            return None
+            try:
+                for title in library_dict.titles:
+                    if title.default:
+                        return title.title
+            except:
+                log.error('Could not get title for %s', library_dict.identifier)
+                return None
+
+        log.error('Could not get title for %s', library_dict['identifier'])
+        return None
     except:
         log.error('Could not get title for library item: %s', library_dict)
         return None
 
+def possibleTitles(raw_title):
+
+    titles = []
+
+    titles.append(toSafeString(raw_title).lower())
+    titles.append(raw_title.lower())
+    titles.append(simplifyString(raw_title))
+
+    return list(set(titles))
+
 def randomString(size = 8, chars = string.ascii_uppercase + string.digits):
     return ''.join(random.choice(chars) for x in range(size))
 
+def splitString(str, split_on = ','):
+    return [x.strip() for x in str.split(split_on)]

@@ -1,15 +1,15 @@
 from bs4 import BeautifulSoup
 from couchpotato.core.event import fireEvent
-from couchpotato.core.helpers.encoding import toUnicode, tryUrlencode, \
-    simplifyString
+from couchpotato.core.helpers.encoding import toUnicode, tryUrlencode
 from couchpotato.core.helpers.rss import RSS
-from couchpotato.core.helpers.variable import tryInt, getTitle
+from couchpotato.core.helpers.variable import tryInt, getTitle, possibleTitles
 from couchpotato.core.logger import CPLog
 from couchpotato.core.providers.nzb.base import NZBProvider
 from couchpotato.environment import Env
 from dateutil.parser import parse
 import re
 import time
+import traceback
 import xml.etree.ElementTree as XMLTree
 
 log = CPLog(__name__)
@@ -18,19 +18,27 @@ log = CPLog(__name__)
 class NzbIndex(NZBProvider, RSS):
 
     urls = {
-        'download': 'http://www.nzbindex.nl/download/',
-        'api': 'http://www.nzbindex.nl/rss/',
+        'download': 'https://www.nzbindex.com/download/',
+        'api': 'https://www.nzbindex.com/rss/',
     }
 
     http_time_between_calls = 1 # Seconds
 
     def search(self, movie, quality):
 
-        results = []
         if self.isDisabled():
-            return results
+            return []
 
-        q = '"%s %s" %s' % (simplifyString(getTitle(movie['library'])), movie['library']['year'], quality.get('identifier'))
+        results = []
+        for title in possibleTitles(getTitle(movie['library'])):
+            results.extend(self._search(title, movie, quality))
+
+        return self.removeDuplicateResults(results)
+
+    def _search(self, title, movie, quality):
+        results = []
+
+        q = '"%s" %s %s' % (title, movie['library']['year'], quality.get('identifier'))
         arguments = tryUrlencode({
             'q': q,
             'age': Env.setting('retention', 'nzb'),
@@ -44,9 +52,9 @@ class NzbIndex(NZBProvider, RSS):
         })
         url = "%s?%s" % (self.urls['api'], arguments)
 
-        cache_key = 'nzbindex.%s.%s' % (movie['library']['identifier'], quality.get('identifier'))
-
+        cache_key = 'nzbindex.%s.%s' % (movie['library']['identifier'], q)
         data = self.getCache(cache_key, url)
+
         if data:
             try:
                 try:
@@ -92,7 +100,7 @@ class NzbIndex(NZBProvider, RSS):
 
                     is_correct_movie = fireEvent('searcher.correct_movie',
                                                  nzb = new, movie = movie, quality = quality,
-                                                 imdb_results = False, single_category = False, single = True)
+                                                 imdb_results = False, single = True)
 
                     if is_correct_movie:
                         new['score'] = fireEvent('score.calculate', new, movie, single = True)
@@ -100,8 +108,8 @@ class NzbIndex(NZBProvider, RSS):
                         self.found(new)
 
                 return results
-            except SyntaxError:
-                log.error('Failed to parse XML response from NZBMatrix.com')
+            except:
+                log.error('Failed to parsing %s: %s', (self.getName(), traceback.format_exc()))
 
         return results
 

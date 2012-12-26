@@ -23,7 +23,7 @@ class Scanner(Plugin):
         'media': 314572800, # 300MB
         'trailer': 1048576, # 1MB
     }
-    ignored_in_path = ['_unpack', '_failed_', '_unknown_', '_exists_', '_failed_remove_', '_failed_rename_', '.appledouble', '.appledb', '.appledesktop', os.path.sep + '._', '.ds_store', 'cp.cpnfo'] #unpacking, smb-crap, hidden files
+    ignored_in_path = ['extracting', '_unpack', '_failed_', '_unknown_', '_exists_', '_failed_remove_', '_failed_rename_', '.appledouble', '.appledb', '.appledesktop', os.path.sep + '._', '.ds_store', 'cp.cpnfo'] #unpacking, smb-crap, hidden files
     ignore_names = ['extract', 'extracting', 'extracted', 'movie', 'movies', 'film', 'films', 'download', 'downloads', 'video_ts', 'audio_ts', 'bdmv', 'certificate']
     extensions = {
         'movie': ['mkv', 'wmv', 'avi', 'mpg', 'mpeg', 'mp4', 'm2ts', 'iso', 'img', 'mdf', 'ts', 'm4v'],
@@ -34,6 +34,7 @@ class Scanner(Plugin):
         'subtitle_extra': ['idx'],
         'trailer': ['mov', 'mp4', 'flv']
     }
+
     file_types = {
         'subtitle': ('subtitle', 'subtitle'),
         'subtitle_extra': ('subtitle', 'subtitle_extra'),
@@ -42,12 +43,28 @@ class Scanner(Plugin):
         'movie': ('video', 'movie'),
         'movie_extra': ('movie', 'movie_extra'),
         'backdrop': ('image', 'backdrop'),
+        'poster': ('image', 'poster'),
+        'thumbnail': ('image', 'thumbnail'),
         'leftover': ('leftover', 'leftover'),
     }
 
     codecs = {
         'audio': ['dts', 'ac3', 'ac3d', 'mp3'],
         'video': ['x264', 'h264', 'divx', 'xvid']
+    }
+
+    audio_codec_map = {
+        0x2000: 'ac3',
+        0x2001: 'dts',
+        0x0055: 'mp3',
+        0x0050: 'mp2',
+        0x0001: 'pcm',
+        0x003: 'pcm',
+        0x77a1: 'tta1',
+        0x5756: 'wav',
+        0x6750: 'vorbis',
+        0xF1AC: 'flac',
+        0x00ff: 'aac',
     }
 
     source_media = {
@@ -74,63 +91,16 @@ class Scanner(Plugin):
 
     cp_imdb = '(\.cp\((?P<id>tt[0-9{7}]+)\))'
 
-    path_identifiers = {} # bind identifier to filepath
-
     def __init__(self):
 
         addEvent('scanner.create_file_identifier', self.createStringIdentifier)
         addEvent('scanner.remove_cptag', self.removeCPTag)
 
         addEvent('scanner.scan', self.scan)
-        addEvent('scanner.files', self.scanFilesToLibrary)
-        addEvent('scanner.folder', self.scanFolderToLibrary)
         addEvent('scanner.name_year', self.getReleaseNameYear)
         addEvent('scanner.partnumber', self.getPartNumber)
 
-        def after_rename(group):
-            return self.scanFilesToLibrary(folder = group['destination_dir'], files = group['renamed_files'])
-
-        addEvent('renamer.after', after_rename)
-
-    def scanFilesToLibrary(self, folder = None, files = None):
-
-        folder = os.path.normpath(folder)
-
-        groups = self.scan(folder = folder, files = files)
-
-        for group in groups.itervalues():
-            if group['library']:
-                fireEvent('release.add', group = group)
-
-    def scanFolderToLibrary(self, folder = None, newer_than = 0, simple = True):
-
-        folder = os.path.normpath(folder)
-
-        if not os.path.isdir(folder):
-            return
-
-        groups = self.scan(folder = folder, simple = simple, newer_than = newer_than)
-
-        added_identifier = []
-        while True and not self.shuttingDown():
-            try:
-                identifier, group = groups.popitem()
-            except:
-                break
-
-            # Save to DB
-            if group['library']:
-
-                # Add release
-                fireEvent('release.add', group = group)
-                library_item = fireEvent('library.update', identifier = group['library'].get('identifier'), single = True)
-                if library_item:
-                    added_identifier.append(library_item['identifier'])
-
-        return added_identifier
-
-
-    def scan(self, folder = None, files = [], simple = False, newer_than = 0):
+    def scan(self, folder = None, files = None, simple = False, newer_than = 0, on_found = None):
 
         folder = ss(os.path.normpath(folder))
 
@@ -143,7 +113,8 @@ class Scanner(Plugin):
         leftovers = []
 
         # Scan all files of the folder if no files are set
-        if len(files) == 0:
+        if not files:
+            check_file_date = True
             try:
                 files = []
                 for root, dirs, walk_files in os.walk(folder):
@@ -151,6 +122,9 @@ class Scanner(Plugin):
                         files.append(os.path.join(root, filename))
             except:
                 log.error('Failed getting files from %s: %s', (folder, traceback.format_exc()))
+        else:
+            check_file_date = False
+            files = [ss(x) for x in files]
 
         db = get_session()
 
@@ -220,18 +194,19 @@ class Scanner(Plugin):
 
 
         # Create identifiers for all leftover files
+        path_identifiers = {}
         for file_path in leftovers:
             identifier = self.createStringIdentifier(file_path, folder)
 
-            if not self.path_identifiers.get(identifier):
-                self.path_identifiers[identifier] = []
+            if not path_identifiers.get(identifier):
+                path_identifiers[identifier] = []
 
-            self.path_identifiers[identifier].append(file_path)
+            path_identifiers[identifier].append(file_path)
 
 
         # Group the files based on the identifier
         delete_identifiers = []
-        for identifier, found_files in self.path_identifiers.iteritems():
+        for identifier, found_files in path_identifiers.iteritems():
             log.debug('Grouping files on identifier: %s', identifier)
 
             group = movie_files.get(identifier)
@@ -248,13 +223,13 @@ class Scanner(Plugin):
 
         # Cleaning up used
         for identifier in delete_identifiers:
-            if self.path_identifiers.get(identifier):
-                del self.path_identifiers[identifier]
+            if path_identifiers.get(identifier):
+                del path_identifiers[identifier]
         del delete_identifiers
 
         # Group based on folder
         delete_identifiers = []
-        for identifier, found_files in self.path_identifiers.iteritems():
+        for identifier, found_files in path_identifiers.iteritems():
             log.debug('Grouping files on foldername: %s', identifier)
 
             for ff in found_files:
@@ -274,12 +249,12 @@ class Scanner(Plugin):
 
         # Cleaning up used
         for identifier in delete_identifiers:
-            if self.path_identifiers.get(identifier):
-                del self.path_identifiers[identifier]
+            if path_identifiers.get(identifier):
+                del path_identifiers[identifier]
         del delete_identifiers
 
-        # Determine file types
-        processed_movies = {}
+        # Make sure we remove older / still extracting files
+        valid_files = {}
         while True and not self.shuttingDown():
             try:
                 identifier, group = movie_files.popitem()
@@ -301,8 +276,16 @@ class Scanner(Plugin):
                 if file_too_new:
                     break
 
-            if file_too_new:
-                log.info('Files seem to be still unpacking or just unpacked (created on %s), ignoring for now: %s', (time.ctime(file_time[0]), identifier))
+            if check_file_date and file_too_new:
+                try:
+                    time_string = time.ctime(file_time[0])
+                except:
+                    try:
+                        time_string = time.ctime(file_time[1])
+                    except:
+                        time_string = 'unknown'
+
+                log.info('Files seem to be still unpacking or just unpacked (created on %s), ignoring for now: %s', (time_string, identifier))
 
                 # Delete the unsorted list
                 del group['unsorted_files']
@@ -311,17 +294,33 @@ class Scanner(Plugin):
 
             # Only process movies newer than x
             if newer_than and newer_than > 0:
+                has_new_files = False
                 for cur_file in group['unsorted_files']:
                     file_time = [os.path.getmtime(cur_file), os.path.getctime(cur_file)]
-                    if file_time[0] > time.time() or file_time[1] > time.time():
+                    if file_time[0] > newer_than or file_time[1] > newer_than:
+                        has_new_files = True
                         break
 
-                log.debug('None of the files have changed since %s for %s, skipping.', (time.ctime(newer_than), identifier))
+                if not has_new_files:
+                    log.debug('None of the files have changed since %s for %s, skipping.', (time.ctime(newer_than), identifier))
 
-                # Delete the unsorted list
-                del group['unsorted_files']
+                    # Delete the unsorted list
+                    del group['unsorted_files']
 
-                continue
+                    continue
+
+            valid_files[identifier] = group
+
+        del movie_files
+
+        # Determine file types
+        processed_movies = {}
+        total_found = len(valid_files)
+        while True and not self.shuttingDown():
+            try:
+                identifier, group = valid_files.popitem()
+            except:
+                break
 
             # Group extra (and easy) files first
             # images = self.getImages(group['unsorted_files'])
@@ -346,7 +345,7 @@ class Scanner(Plugin):
                 continue
 
             log.debug('Getting metadata for %s', identifier)
-            group['meta_data'] = self.getMetaData(group)
+            group['meta_data'] = self.getMetaData(group, folder = folder)
 
             # Subtitle meta
             group['subtitle_language'] = self.getSubtitleLanguage(group) if not simple else {}
@@ -383,20 +382,20 @@ class Scanner(Plugin):
                 movie = db.query(Movie).filter_by(library_id = group['library']['id']).first()
                 group['movie_id'] = None if not movie else movie.id
 
-
             processed_movies[identifier] = group
 
-
-        # Clean up
-        self.path_identifiers = {}
+            # Notify parent & progress on something found
+            if on_found:
+                on_found(group, total_found, total_found - len(processed_movies))
 
         if len(processed_movies) > 0:
             log.info('Found %s movies in the folder %s', (len(processed_movies), folder))
         else:
             log.debug('Found no movies in the folder %s', (folder))
+
         return processed_movies
 
-    def getMetaData(self, group):
+    def getMetaData(self, group, folder = ''):
 
         data = {}
         files = list(group['files']['movie'])
@@ -422,10 +421,10 @@ class Scanner(Plugin):
         if not data['quality']:
             data['quality'] = fireEvent('quality.single', 'dvdr' if group['is_dvd'] else 'dvdrip', single = True)
 
-        data['quality_type'] = 'HD' if data.get('resolution_width', 0) >= 1280 else 'SD'
+        data['quality_type'] = 'HD' if data.get('resolution_width', 0) >= 1280 or data['quality'].get('hd') else 'SD'
 
         filename = re.sub('(.cp\(tt[0-9{7}]+\))', '', files[0])
-        data['group'] = self.getGroup(filename)
+        data['group'] = self.getGroup(filename[len(folder):])
         data['source'] = self.getSourceMedia(filename)
 
         return data
@@ -434,9 +433,18 @@ class Scanner(Plugin):
 
         try:
             p = enzyme.parse(filename)
+
+            # Video codec
+            vc = ('h264' if p.video[0].codec == 'AVC1' else p.video[0].codec).lower()
+
+            # Audio codec
+            ac = p.audio[0].codec
+            try: ac = self.audio_codec_map.get(p.audio[0].codec)
+            except: pass
+
             return {
-                'video': p.video[0].codec,
-                'audio': p.audio[0].codec,
+                'video': vc,
+                'audio': ac,
                 'resolution_width': tryInt(p.video[0].width),
                 'resolution_height': tryInt(p.video[0].height),
             }
@@ -458,7 +466,7 @@ class Scanner(Plugin):
             scan_result = []
             for p in paths:
                 if not group['is_dvd']:
-                    video = Video.from_path(p)
+                    video = Video.from_path(toUnicode(p))
                     video_result = [(video, video.scan())]
                     scan_result.extend(video_result)
 
@@ -533,7 +541,6 @@ class Scanner(Plugin):
                     break
                 except:
                     pass
-            #db.close()
 
         # Search based on OpenSubtitleHash
         if not imdb_id and not group['is_dvd']:
@@ -754,8 +761,8 @@ class Scanner(Plugin):
 
     def getGroup(self, file):
         try:
-            match = re.search('-(?P<group>[A-Z0-9]+).', file, re.I)
-            return match.group('group') or ''
+            match = re.findall('\-([A-Z0-9]+)[\.\/]', file, re.I)
+            return match[-1] or ''
         except:
             return ''
 
@@ -768,7 +775,7 @@ class Scanner(Plugin):
         return None
 
     def findYear(self, text):
-        matches = re.search('(?P<year>[12]{1}[0-9]{3})', text)
+        matches = re.search('(?P<year>19[0-9]{2}|20[0-9]{2})', text)
         if matches:
             return matches.group('year')
 
@@ -780,7 +787,7 @@ class Scanner(Plugin):
         guess = {}
         if file_name:
             try:
-                guess = guess_movie_info(file_name)
+                guess = guess_movie_info(toUnicode(file_name))
                 if guess.get('title') and guess.get('year'):
                     guess = {
                         'name': guess.get('title'),

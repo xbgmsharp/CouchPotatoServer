@@ -5,13 +5,12 @@ def start():
 
 config = [{
     'name': 'automation',
-    'order': 30,
+    'order': 101,
     'groups': [
         {
             'tab': 'automation',
             'name': 'automation',
-            'label': 'Automation',
-            'description': 'Minimal movie requirements',
+            'label': 'Minimal movie requirements',
             'options': [
                 {
                     'name': 'year',
@@ -25,7 +24,7 @@ config = [{
                 },
                 {
                     'name': 'rating',
-                    'default': 6.0,
+                    'default': 7.0,
                     'type': 'float',
                 },
                 {

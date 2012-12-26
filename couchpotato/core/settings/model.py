@@ -28,7 +28,13 @@ class JsonType(TypeDecorator):
     impl = UnicodeText
 
     def process_bind_param(self, value, dialect):
-        return toUnicode(json.dumps(value, cls = SetEncoder))
+        try:
+            return toUnicode(json.dumps(value, cls = SetEncoder))
+        except:
+            try:
+                return toUnicode(json.dumps(value, cls = SetEncoder, encoding = 'latin-1'))
+            except:
+                raise
 
     def process_result_value(self, value, dialect):
         return json.loads(value if value else '{}')
@@ -94,8 +100,24 @@ class Release(Entity):
     movie = ManyToOne('Movie')
     status = ManyToOne('Status')
     quality = ManyToOne('Quality')
-    files = ManyToMany('File', cascade = 'all, delete-orphan', single_parent = True)
+    files = ManyToMany('File')
     info = OneToMany('ReleaseInfo', cascade = 'all, delete-orphan')
+
+    def to_dict(self, deep = {}, exclude = []):
+        orig_dict = super(Release, self).to_dict(deep = deep, exclude = exclude)
+
+        new_info = {}
+        for info in orig_dict.get('info', []):
+
+            value = info['value']
+            try: value = int(info['value'])
+            except: pass
+
+            new_info[info['identifier']] = value
+
+        orig_dict['info'] = new_info
+
+        return orig_dict
 
 
 class ReleaseInfo(Entity):

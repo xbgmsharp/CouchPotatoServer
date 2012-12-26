@@ -1,5 +1,6 @@
 from couchpotato.api import addApiView
 from couchpotato.core.helpers.request import getParam, jsonified
+from couchpotato.core.helpers.variable import getUserDir
 from couchpotato.core.plugins.base import Plugin
 import ctypes
 import os
@@ -27,6 +28,8 @@ class FileBrowser(Plugin):
             },
             'return': {'type': 'object', 'example': """{
     'is_root': bool, //is top most folder
+    'parent': string, //parent folder of requested path
+    'home': string, //user home folder
     'empty': bool, //directory is empty
     'dirs': array, //directory names
 }"""}
@@ -55,7 +58,7 @@ class FileBrowser(Plugin):
 
         driveletters = []
         for drive in string.ascii_uppercase:
-            if win32file.GetDriveType(drive + ":") in [win32file.DRIVE_FIXED, win32file.DRIVE_REMOTE]:
+            if win32file.GetDriveType(drive + ":") in [win32file.DRIVE_FIXED, win32file.DRIVE_REMOTE, win32file.DRIVE_RAMDISK, win32file.DRIVE_REMOVABLE]:
                 driveletters.append(drive + ":\\")
 
         return driveletters
@@ -63,15 +66,28 @@ class FileBrowser(Plugin):
     def view(self):
 
         path = getParam('path', '/')
+        home = getUserDir()
+
+        if not path:
+            path = home
 
         try:
             dirs = self.getDirectories(path = path, show_hidden = getParam('show_hidden', True))
         except:
             dirs = []
 
+        parent = os.path.dirname(path.rstrip(os.path.sep))
+        if parent == path.rstrip(os.path.sep):
+            parent = '/'
+        elif parent != '/' and parent[-2:] != ':\\':
+            parent += os.path.sep
+
         return jsonified({
-            'is_root': path == '/' or not path,
+            'is_root': path == '/',
             'empty': len(dirs) == 0,
+            'parent': parent,
+            'home': home + os.path.sep,
+            'platform': os.name,
             'dirs': dirs,
         })
 

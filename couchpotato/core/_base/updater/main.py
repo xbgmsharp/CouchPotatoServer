@@ -14,6 +14,7 @@ import shutil
 import tarfile
 import time
 import traceback
+import version
 
 log = CPLog(__name__)
 
@@ -32,7 +33,7 @@ class Updater(Plugin):
             self.updater = SourceUpdater()
 
         fireEvent('schedule.interval', 'updater.check', self.autoUpdate, hours = 6)
-        addEvent('app.load', self.check)
+        addEvent('app.load', self.autoUpdate)
         addEvent('updater.info', self.info)
 
         addApiView('updater.info', self.getInfo, docs = {
@@ -102,6 +103,12 @@ class Updater(Plugin):
             success = False
         else:
             success = self.updater.doUpdate()
+            if success:
+                fireEventAsync('app.restart')
+
+            # Assume the updater handles things
+            if not success:
+                success = True
 
         return jsonified({
             'success': success
@@ -112,7 +119,7 @@ class BaseUpdater(Plugin):
 
     repo_user = 'RuudBurger'
     repo_name = 'CouchPotatoServer'
-    branch = 'master'
+    branch = version.BRANCH
 
     version = None
     update_failed = False
@@ -208,7 +215,7 @@ class GitUpdater(BaseUpdater):
     def check(self):
 
         if self.update_version:
-            return
+            return True
 
         log.info('Checking for new version on github for %s', self.repo_name)
         if not Env.get('dev'):
@@ -265,13 +272,13 @@ class SourceUpdater(BaseUpdater):
             tar.close()
             os.remove(destination)
 
-            self.replaceWith(os.path.join(extracted_path, os.listdir(extracted_path)[0]))
-            self.removeDir(extracted_path)
+            if self.replaceWith(os.path.join(extracted_path, os.listdir(extracted_path)[0])):
+                self.removeDir(extracted_path)
 
-            # Write update version to file
-            self.createFile(self.version_file, json.dumps(self.update_version))
+                # Write update version to file
+                self.createFile(self.version_file, json.dumps(self.update_version))
 
-            return True
+                return True
         except:
             log.error('Failed updating: %s', traceback.format_exc())
 
@@ -282,7 +289,7 @@ class SourceUpdater(BaseUpdater):
         app_dir = ss(Env.get('app_dir'))
 
         # Get list of files we want to overwrite
-        self.deletePyc(only_excess = False)
+        self.deletePyc()
         existing_files = []
         for root, subfiles, filenames in os.walk(app_dir):
             for filename in filenames:
@@ -295,18 +302,21 @@ class SourceUpdater(BaseUpdater):
 
                 if not Env.get('dev'):
                     try:
-                        os.remove(tofile)
-                    except:
-                        pass
+                        if os.path.isfile(tofile):
+                            os.remove(tofile)
 
-                    try:
-                        os.renames(fromfile, tofile)
+                        dirname = os.path.dirname(tofile)
+                        if not os.path.isdir(dirname):
+                            self.makeDir(dirname)
+
+                        shutil.move(fromfile, tofile)
                         try:
                             existing_files.remove(tofile)
                         except ValueError:
                             pass
-                    except Exception, e:
-                        log.error('Failed overwriting file: %s', e)
+                    except:
+                        log.error('Failed overwriting file "%s": %s', (tofile, traceback.format_exc()))
+                        return False
 
         if Env.get('app_dir') not in Env.get('data_dir'):
             for still_exists in existing_files:
@@ -314,6 +324,8 @@ class SourceUpdater(BaseUpdater):
                     os.remove(still_exists)
                 except:
                     log.error('Failed removing non-used file: %s', traceback.format_exc())
+
+        return True
 
 
     def removeDir(self, path):
@@ -375,11 +387,6 @@ class SourceUpdater(BaseUpdater):
 
 class DesktopUpdater(BaseUpdater):
 
-    version = None
-    update_failed = False
-    update_version = None
-    last_check = 0
-
     def __init__(self):
         self.desktop = Env.get('desktop')
 
@@ -388,11 +395,12 @@ class DesktopUpdater(BaseUpdater):
             def do_restart(e):
                 if e['status'] == 'done':
                     fireEventAsync('app.restart')
-                else:
+                elif e['status'] == 'error':
                     log.error('Failed updating desktop: %s', e['exception'])
                     self.update_failed = True
 
             self.desktop._esky.auto_update(callback = do_restart)
+            return
         except:
             self.update_failed = True
 
@@ -403,7 +411,7 @@ class DesktopUpdater(BaseUpdater):
             'last_check': self.last_check,
             'update_version': self.update_version,
             'version': self.getVersion(),
-            'branch': 'desktop_build',
+            'branch': self.branch,
         }
 
     def check(self):

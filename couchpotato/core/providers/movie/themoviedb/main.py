@@ -3,6 +3,7 @@ from couchpotato.core.helpers.encoding import simplifyString, toUnicode
 from couchpotato.core.logger import CPLog
 from couchpotato.core.providers.movie.base import MovieProvider
 from libs.themoviedb import tmdb
+import traceback
 
 log = CPLog(__name__)
 
@@ -11,8 +12,8 @@ class TheMovieDb(MovieProvider):
 
     def __init__(self):
         addEvent('movie.by_hash', self.byHash)
-        addEvent('movie.search', self.search, priority = 1)
-        addEvent('movie.info', self.getInfo, priority = 1)
+        addEvent('movie.search', self.search, priority = 2)
+        addEvent('movie.info', self.getInfo, priority = 2)
         addEvent('movie.info_by_tmdb', self.getInfoByTMDBId)
 
         # Use base wrapper
@@ -61,7 +62,12 @@ class TheMovieDb(MovieProvider):
 
         if not results:
             log.debug('Searching for movie: %s', q)
-            raw = tmdb.search(search_string)
+
+            raw = None
+            try:
+                raw = tmdb.search(search_string)
+            except:
+                log.error('Failed searching TMDB for "%s": %s', (search_string, traceback.format_exc()))
 
             results = []
             if raw:

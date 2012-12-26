@@ -1,6 +1,6 @@
 from couchpotato.core.event import addEvent, fireEvent
 from couchpotato.core.helpers.encoding import tryUrlencode
-from couchpotato.core.helpers.variable import tryInt, tryFloat
+from couchpotato.core.helpers.variable import tryInt, tryFloat, splitString
 from couchpotato.core.logger import CPLog
 from couchpotato.core.providers.movie.base import MovieProvider
 import json
@@ -27,8 +27,10 @@ class IMDBAPI(MovieProvider):
 
         name_year = fireEvent('scanner.name_year', q, single = True)
 
-        if not q or not name_year.get('name'):
-            return []
+        if not name_year or (name_year and not name_year.get('name')):
+            name_year = {
+                'name': q
+            }
 
         cache_key = 'imdbapi.cache.%s' % q
         cached = self.getCache(cache_key, self.urls['search'] % tryUrlencode({'t': name_year.get('name'), 'y': name_year.get('year', '')}), timeout = 3)
@@ -71,7 +73,7 @@ class IMDBAPI(MovieProvider):
                 log.info('No proper json to decode')
                 return movie_data
 
-            if movie.get('Response') == 'Parse Error':
+            if movie.get('Response') == 'Parse Error' or movie.get('Response') == 'False':
                 return movie_data
 
             tmp_movie = movie.copy()
@@ -90,17 +92,17 @@ class IMDBAPI(MovieProvider):
                 },
                 'rating': {
                     'imdb': (tryFloat(movie.get('imdbRating', 0)), tryInt(movie.get('imdbVotes', '').replace(',', ''))),
-                    #'rotten': (tryFloat(movie.get('tomatoRating', 0)), tryInt(movie.get('tomatoReviews', 0))),
+                    #'rotten': (tryFloat(movie.get('tomatoRating', 0)), tryInt(movie.get('tomatoReviews', '').replace(',', ''))),
                 },
                 'imdb': str(movie.get('imdbID', '')),
                 'runtime': self.runtimeToMinutes(movie.get('Runtime', '')),
                 'released': movie.get('Released', ''),
                 'year': year if isinstance(year, (int)) else None,
                 'plot': movie.get('Plot', ''),
-                'genres': movie.get('Genre', '').split(','),
-                'directors': movie.get('Director', '').split(','),
-                'writers': movie.get('Writer', '').split(','),
-                'actors': movie.get('Actors', '').split(','),
+                'genres': splitString(movie.get('Genre', '')),
+                'directors': splitString(movie.get('Director', '')),
+                'writers': splitString(movie.get('Writer', '')),
+                'actors': splitString(movie.get('Actors', '')),
             }
         except:
             log.error('Failed parsing IMDB API json: %s', traceback.format_exc())

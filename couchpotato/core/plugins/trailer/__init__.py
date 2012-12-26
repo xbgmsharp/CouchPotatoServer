@@ -8,9 +8,9 @@ config = [{
     'groups': [
         {
             'tab': 'renamer',
-            'subtab': 'trailer',
             'name': 'trailer',
-            'label': 'Download trailer after rename',
+            'label': 'Download trailer',
+            'description': 'after rename',
             'options': [
                 {
                     'name': 'enabled',
@@ -25,10 +25,11 @@ config = [{
                     'values': [('1080P', '1080p'), ('720P', '720p'), ('480P', '480p')],
                 },
                 {
-                    'name': 'automatic',
-                    'default': False,
-                    'type': 'bool',
-                    'description': 'Automaticly search & download for movies in library',
+                    'name': 'name',
+                    'label': 'Naming',
+                    'default': '<filename>-trailer',
+                    'advanced': True,
+                    'description': 'Use <filename> to use above settings.'
                 },
             ],
         },

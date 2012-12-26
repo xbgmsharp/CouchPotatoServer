@@ -1,7 +1,6 @@
 from couchpotato.core.event import fireEvent
 from couchpotato.core.helpers.encoding import simplifyString
 from couchpotato.core.helpers.variable import tryInt
-from couchpotato.core.plugins.scanner.main import Scanner
 from couchpotato.environment import Env
 import re
 
@@ -11,7 +10,7 @@ name_scores = [
     # Video
     'x264:1', 'h264:1',
     # Audio
-    'DTS:4', 'AC3:2',
+    'dts:4', 'ac3:2',
     # Quality
     '720p:10', '1080p:10', 'bluray:10', 'dvd:1', 'dvdrip:1', 'brrip:1', 'bdrip:1', 'bd50:1', 'bd25:1',
     # Language / Subs
@@ -117,7 +116,7 @@ def sizeScore(size):
 
 
 def providerScore(provider):
-    if provider in ['NZBMatrix', 'Nzbs', 'Newzbin']:
+    if provider in ['OMGWTFNZBs', 'PassThePopcorn', 'SceneAccess', 'TorrentLeech']:
         return 20
 
     if provider in ['Newznab']:

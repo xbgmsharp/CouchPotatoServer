@@ -1,12 +1,10 @@
 from bs4 import BeautifulSoup
 from couchpotato.core.event import fireEvent
-from couchpotato.core.helpers.encoding import toUnicode, tryUrlencode, \
-    simplifyString
+from couchpotato.core.helpers.encoding import toUnicode, tryUrlencode
 from couchpotato.core.helpers.rss import RSS
-from couchpotato.core.helpers.variable import tryInt, getTitle
+from couchpotato.core.helpers.variable import tryInt, getTitle, possibleTitles
 from couchpotato.core.logger import CPLog
 from couchpotato.core.providers.nzb.base import NZBProvider
-from couchpotato.environment import Env
 from dateutil.parser import parse
 import time
 import xml.etree.ElementTree as XMLTree
@@ -17,20 +15,26 @@ log = CPLog(__name__)
 class NZBClub(NZBProvider, RSS):
 
     urls = {
-        'search': 'https://www.nzbclub.com/nzbfeed.aspx?%s',
+        'search': 'http://www.nzbclub.com/nzbfeed.aspx?%s',
     }
 
     http_time_between_calls = 4 #seconds
 
     def search(self, movie, quality):
 
-        results = []
         if self.isDisabled():
-            return results
+            return []
 
-        q = '"%s %s" %s' % (simplifyString(getTitle(movie['library'])), movie['library']['year'], quality.get('identifier'))
-        for ignored in Env.setting('ignored_words', 'searcher').split(','):
-            q = '%s -%s' % (q, ignored.strip())
+        results = []
+        for title in possibleTitles(getTitle(movie['library'])):
+            results.extend(self._search(title, movie, quality))
+
+        return self.removeDuplicateResults(results)
+
+    def _search(self, title, movie, quality):
+        results = []
+
+        q = '"%s %s" %s' % (title, movie['library']['year'], quality.get('identifier'))
 
         params = {
             'q': q,
@@ -86,7 +90,7 @@ class NZBClub(NZBProvider, RSS):
 
                     is_correct_movie = fireEvent('searcher.correct_movie',
                                                  nzb = new, movie = movie, quality = quality,
-                                                 imdb_results = False, single_category = False, single = True)
+                                                 imdb_results = False, single = True)
 
                     if is_correct_movie:
                         new['score'] = fireEvent('score.calculate', new, movie, single = True)

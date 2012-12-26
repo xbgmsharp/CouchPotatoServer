@@ -74,6 +74,31 @@ config = [{
                     'default': False,
                 },
                 {
+                    'advanced': True,
+                    'name': 'run_every',
+                    'label': 'Run every',
+                    'default': 1,
+                    'type': 'int',
+                    'unit': 'min(s)',
+                    'description': 'Detect movie status every X minutes. Will start the renamer if movie is <strong>completed</strong> or handle <strong>failed</strong> download if these options are enabled',
+                },
+                {
+                    'advanced': True,
+                    'name': 'force_every',
+                    'label': 'Force every',
+                    'default': 2,
+                    'type': 'int',
+                    'unit': 'hour(s)',
+                    'description': 'Forces the renamer to scan every X hours',
+                },
+                {
+                    'advanced': True,
+                    'name': 'next_on_failed',
+                    'default': True,
+                    'type': 'bool',
+                    'description': 'Try the next best release for a movie after a download failed.',
+                },
+                {
                     'name': 'move_leftover',
                     'type': 'bool',
                     'description': 'Move all leftover file after renaming, to the movie folder.',
@@ -84,16 +109,7 @@ config = [{
                     'advanced': True,
                     'name': 'separator',
                     'label': 'Separator',
-                    'description': 'Replace all the spaces with a character. Example: ".", "-". Leave empty to use spaces.',
-                },
-                {
-                    'advanced': True,
-                    'name': 'run_every',
-                    'label': 'Run every',
-                    'default': 1,
-                    'type': 'int',
-                    'unit': 'min(s)',
-                    'description': 'Search for new movies inside the folder every X minutes.',
+                    'description': 'Replace all the spaces with a character. Example: ".", "-" (without quotes). Leave empty to use spaces.',
                 },
             ],
         }, {
@@ -114,13 +130,6 @@ config = [{
                     'name': 'nfo_name',
                     'label': 'NFO naming',
                     'default': '<filename>.orig.<ext>',
-                    'type': 'choice',
-                    'options': rename_options
-                },
-                {
-                    'name': 'trailer_name',
-                    'label': 'Trailer naming',
-                    'default': '<filename>-trailer.<ext>',
                     'type': 'choice',
                     'options': rename_options
                 },
