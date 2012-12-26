@@ -157,6 +157,7 @@ body > .spinner, .mask{
 .icon.files { background-image: url('../images/icon.files.png'); }
 .icon.info { background-image: url('../images/icon.info.png'); }
 .icon.trailer { background-image: url('../images/icon.trailer.png'); }
+.icon.status { background-image: url('../images/icon.status.png'); }
 
 /*** Navigation ***/
 .header {

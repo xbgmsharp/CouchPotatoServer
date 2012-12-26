@@ -324,6 +324,94 @@ window.addEvent('domready', function(){
 			}
 
 		})
+
+
+		,'Status': new Class({
+
+			Extends: MovieAction,
+
+			create: function(){
+				var self = this;
+
+				self.el = new Element('a.status', {
+					'title': 'Change movie status (snatched, dowloaded, viewed).',
+					'events': {
+						'click': self.statusMovie.bind(self)
+					}
+				});
+
+			},
+
+			statusMovie: function(e){
+				var self = this;
+				(e).preventDefault();
+
+				if(!self.options_container){
+					self.options_container = new Element('div.options').adopt(
+						new Element('div.form').adopt(
+							self.title_select = new Element('select', {
+								'name': 'title'
+							}),
+							self.profile_select = new Element('select', {
+								'name': 'profile'
+							}),
+							new Element('a.button.edit', {
+								'text': 'Save & Search',
+								'events': {
+									'click': self.save.bind(self)
+								}
+							})
+						)
+					).inject(self.movie, 'top');
+
+					Array.each(self.movie.data.library.titles, function(alt){
+						new Element('option', {
+							'text': alt.title
+						}).inject(self.title_select);
+						
+						if(alt['default'])
+							self.title_select.set('value', alt.title);
+					});
+
+
+					Quality.getActiveProfiles().each(function(profile){
+						new Element('option', {
+							'value': profile.id ? profile.id : profile.data.id,
+							'text': profile.label ? profile.label : profile.data.label
+						}).inject(self.profile_select);
+
+						if(self.movie.profile)
+							self.profile_select.set('value', profile.id ? profile.id : profile.data.id);
+					});
+
+				}
+
+				self.movie.slide('in', self.options_container);
+			},
+
+			save: function(e){
+				(e).preventDefault();
+				var self = this;
+
+				Api.request('movie.edit', {
+					'data': {
+						'id': self.movie.get('id'),
+						'default_title': self.title_select.get('value'),
+						'profile_id': self.profile_select.get('value')
+					},
+					'useSpinner': true,
+					'spinnerTarget': $(self.movie),
+					'onComplete': function(){
+						self.movie.quality.set('text', self.profile_select.getSelected()[0].get('text'));
+						self.movie.title.set('text', self.title_select.getSelected()[0].get('text'));
+					}
+				});
+
+				self.movie.slide('out');
+			}
+
+		})
+
 	};
 
 	MovieActions.Snatched = {
@@ -337,6 +425,8 @@ window.addEvent('domready', function(){
 
 	MovieActions.Done = {
 		'IMDB': IMDBAction
+		,'ALLOCINE': ALLOCINEAction
+		,'SENSACINE': SENSACINEAction
 		,'Edit': MovieActions.Wanted.Edit
 		,'Files': new Class({
 

@@ -152,7 +152,7 @@ class TheMovieDb(MovieProvider):
         movie_data = {
             'via_tmdb': True,
             'tmdb_id': int(movie.get('id', 0)),
-            'titles': [toUnicode(movie.get('name'))],
+            'titles': [toUnicode(movie.get('original_name'))],
             'original_title': movie.get('original_name'),
             'images': {
                 'poster': [poster] if poster else [],
