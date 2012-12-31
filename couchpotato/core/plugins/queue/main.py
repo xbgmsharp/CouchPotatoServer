@@ -14,7 +14,7 @@ class Queue(Plugin):
 
     def __init__(self):
 
-        addEvent('queue.sort', self.)
+        addEvent('queue.sort', self.queueSort)
         addApiView('queue.sort', self.queueSortView, docs = {
             'desc': 'Sort the view',
             'params': {
