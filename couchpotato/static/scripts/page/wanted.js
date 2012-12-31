@@ -375,16 +375,17 @@ window.addEvent('domready', function(){
 
 		})
 
-
 		,'Status': new Class({
 
 			Extends: MovieAction,
+
+			Implements: [Chain],
 
 			create: function(){
 				var self = this;
 
 				self.el = new Element('a.status', {
-					'title': 'Change movie status (snatched, dowloaded, viewed).',
+					'title': 'Change movie status (snatched, downloaded, viewed).',
 					'events': {
 						'click': self.statusMovie.bind(self)
 					}
@@ -402,8 +403,8 @@ window.addEvent('domready', function(){
 							self.title_select = new Element('select', {
 								'name': 'title'
 							}),
-							self.profile_select = new Element('select', {
-								'name': 'profile'
+							self.status_select = new Element('select', {
+								'name': 'status'
 							}),
 							new Element('a.button.edit', {
 								'text': 'Save & Search',
@@ -424,14 +425,14 @@ window.addEvent('domready', function(){
 					});
 
 
-					Quality.getActiveProfiles().each(function(profile){
+					Status.getStatus().each(function(status){
 						new Element('option', {
-							'value': profile.id ? profile.id : profile.data.id,
-							'text': profile.label ? profile.label : profile.data.label
-						}).inject(self.profile_select);
+							'value': status.id ? status.id : status.data.id,
+							'text': status.label ? status.label : status.data.label
+						}).inject(self.status_select);
 
-						if(self.movie.profile)
-							self.profile_select.set('value', profile.id ? profile.id : profile.data.id);
+						if(self.movie.status)
+							self.status_select.set('text', status.id ? status.id : status.data.id);
 					});
 
 				}
@@ -442,20 +443,46 @@ window.addEvent('domready', function(){
 			save: function(e){
 				(e).preventDefault();
 				var self = this;
-
+/*
 				Api.request('movie.edit', {
 					'data': {
 						'id': self.movie.get('id'),
-						'default_title': self.title_select.get('value'),
-						'profile_id': self.profile_select.get('value')
+						'profile_id': 'Best',
+						'default_title': self.title_select.get('value')
 					},
 					'useSpinner': true,
 					'spinnerTarget': $(self.movie),
 					'onComplete': function(){
-						self.movie.quality.set('text', self.profile_select.getSelected()[0].get('text'));
 						self.movie.title.set('text', self.title_select.getSelected()[0].get('text'));
 					}
 				});
+
+				var movie = $(self.movie);
+*/
+				self.chain(
+					function(){
+						self.callChain();
+					},
+					function(){
+						Api.request('movie.status', {
+							'data': {
+								'id': self.movie.get('id'),
+								'status': self.status_select.getSelected()[0].get('text').toLowerCase()
+							},
+							'onComplete': function(){
+								movie.set('tween', {
+									'duration': 300,
+									'onComplete': function(){
+										movie.destroy();
+									}
+								});
+								movie.tween('height', 0);
+							}
+						});
+					}
+				);
+
+				self.callChain();
 
 				self.movie.slide('out');
 			}
@@ -471,6 +498,7 @@ window.addEvent('domready', function(){
 		,'Trailer': TrailerAction
 		,'Done': MovieActions.Wanted.Done
 		,'Delete': MovieActions.Wanted.Delete
+		,'Status': MovieActions.Wanted.Status
 	};
 
 	MovieActions.Done = {
@@ -531,6 +559,7 @@ window.addEvent('domready', function(){
 
 		})
 		,'Delete': MovieActions.Wanted.Delete
+		,'Status': MovieActions.Wanted.Status
 	};
 
 })
