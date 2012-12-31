@@ -33,7 +33,7 @@ class StatusPlugin(Plugin):
         addEvent('app.initialize', self.fill)
 
         addApiView('status.list', self.list, docs = {
-            'desc': 'Check for available update',
+            'desc': 'List available status',
             'return': {'type': 'object', 'example': """{
             'success': True,
             'list': array, statuses
