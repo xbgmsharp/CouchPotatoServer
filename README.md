@@ -1,6 +1,17 @@
 CouchPotato Server
 =====
 
+## My version
+Same as original with a few add:
+* Improve importer from V1
+* Add a importer script to check
+* Defere all external links
+* Add link for "allocine" and "sesacine"
+* Add queue management
+* Add downloaded options
+* Allow to change the movie status (snatched,viewed,done,etc...)
+* Add statistics tab in settings (NB movies by status)
+
 CouchPotato (CP) is an automatic NZB and torrent downloader. You can keep a "movies I want"-list and it will search for NZBs/torrents of these movies every X hours.
 Once a movie is found, it will send it to SABnzbd or download the torrent to a specified directory.
 
