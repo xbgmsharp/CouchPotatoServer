@@ -456,9 +456,9 @@ window.addEvent('domready', function(){
 						self.movie.title.set('text', self.title_select.getSelected()[0].get('text'));
 					}
 				});
-
-				var movie = $(self.movie);
 */
+				var movie = $(self.movie);
+
 				self.chain(
 					function(){
 						self.callChain();
