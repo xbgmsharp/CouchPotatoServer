@@ -72,6 +72,8 @@ class LibraryPlugin(Plugin):
             info = fireEvent('movie.info', merge = True, identifier = identifier)
 
             # Don't need those here
+            try: del info['in_db']
+            except: pass
             try: del info['in_wanted']
             except: pass
             try: del info['in_library']

@@ -48,6 +48,7 @@ class MovieResultModifier(Plugin):
         temp = {
             'in_wanted': False,
             'in_library': False,
+            'in_db': False,
         }
 
         # Add release info from current library
@@ -61,6 +62,8 @@ class MovieResultModifier(Plugin):
                 done_status = fireEvent('status.get', 'done', single = True)
 
                 for movie in l.movies:
+                    temp['in_db'] = fireEvent('movie.get', movie.id, single = True)
+
                     if movie.status_id == active_status['id']:
                         temp['in_wanted'] = fireEvent('movie.get', movie.id, single = True)
 
