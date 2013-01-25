@@ -4,6 +4,7 @@ from couchpotato.api import api, NonBlockHandler
 from couchpotato.core.event import fireEventAsync, fireEvent
 from couchpotato.core.helpers.variable import getDataDir, tryInt
 from logging import handlers
+from tornado.httpserver import HTTPServer
 from tornado.web import Application, FallbackHandler
 from tornado.wsgi import WSGIContainer
 from werkzeug.contrib.cache import FileSystemCache
@@ -97,7 +98,7 @@ def runCouchPotato(options, base_path, args, data_dir = None, log_dir = None, En
     total_backups = len(backups)
     for backup in backups:
         if total_backups > 3:
-            if int(os.path.basename(backup)) < time.time() - 259200:
+            if tryInt(os.path.basename(backup)) < time.time() - 259200:
                 for src_file in src_files:
                     b_file = os.path.join(backup, os.path.basename(src_file))
                     if os.path.isfile(b_file):
@@ -210,8 +211,10 @@ def runCouchPotato(options, base_path, args, data_dir = None, log_dir = None, En
     # app.debug = development
     config = {
         'use_reloader': reloader,
-        'host': Env.setting('host', default = '0.0.0.0'),
-        'port': tryInt(Env.setting('port', default = 5000))
+        'port': tryInt(Env.setting('port', default = 5000)),
+        'host': Env.setting('host', default = ''),
+        'ssl_cert': Env.setting('ssl_cert', default = None),
+        'ssl_key': Env.setting('ssl_key', default = None),
     }
 
     # Static path
@@ -243,12 +246,20 @@ def runCouchPotato(options, base_path, args, data_dir = None, log_dir = None, En
         debug = config['use_reloader']
     )
 
+    if config['ssl_cert'] and config['ssl_key']:
+        server = HTTPServer(application, no_keep_alive = True, ssl_options = {
+           "certfile": config['ssl_cert'],
+           "keyfile": config['ssl_key'],
+        })
+    else:
+        server = HTTPServer(application, no_keep_alive = True)
+
     try_restart = True
     restart_tries = 5
 
     while try_restart:
         try:
-            application.listen(config['port'], config['host'], no_keep_alive = True)
+            server.listen(config['port'], config['host'])
             loop.start()
         except Exception, e:
             try:
