@@ -1,6 +1,7 @@
 from __future__ import with_statement
 from couchpotato.core.downloaders.base import Downloader
 from couchpotato.core.logger import CPLog
+from couchpotato.environment import Env
 import os
 import traceback
 
@@ -36,6 +37,7 @@ class Blackhole(Downloader):
                         log.info('Downloading %s to %s.', (data.get('type'), fullPath))
                         with open(fullPath, 'wb') as f:
                             f.write(filedata)
+                        os.chmod(fullPath, Env.getPermission('file'))
                         return True
                     else:
                         log.info('File %s already exists.', fullPath)
@@ -60,5 +62,11 @@ class Blackhole(Downloader):
             return ['nzb']
 
     def isEnabled(self, manual, data = {}):
+        for_type = ['both']
+        if data and 'torrent' in data.get('type'):
+            for_type.append('torrent')
+        elif data:
+            for_type.append(data.get('type'))
+
         return super(Blackhole, self).isEnabled(manual, data) and \
-            ((self.conf('use_for') in ['both', 'torrent' if 'torrent' in data.get('type') else data.get('type')]))
+            ((self.conf('use_for') in for_type))
