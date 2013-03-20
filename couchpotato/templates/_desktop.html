@@ -11,6 +11,9 @@
 		{% for url in fireEvent('clientscript.get_styles', as_html = True, location = 'head', single = True) %}
 		<link rel="stylesheet" href="{{ url_for('web.index') }}{{ url }}" type="text/css">{% endfor %}
 
+<script type="text/javascript" src="{{ url_for('web.static', filename='scripts/page/queue.js') }}"></script>
+<script type="text/javascript" src="{{ url_for('web.static', filename='scripts/page/stats.js') }}"></script>
+
 		<link href="{{ url_for('web.static', filename='images/favicon.ico') }}" rel="icon" type="image/x-icon" />
 		<link rel="apple-touch-icon" href="{{ url_for('web.static', filename='images/homescreen.png') }}" />
 
