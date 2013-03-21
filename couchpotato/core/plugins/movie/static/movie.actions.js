@@ -66,7 +66,49 @@ MA.IMDB = new Class({
 
 		self.el = new Element('a.imdb', {
 			'title': 'Go to the IMDB page of ' + self.movie.getTitle(),
-			'href': 'http://www.imdb.com/title/'+self.id+'/',
+			'href': 'http://www.dereferer.org/?http://www.imdb.com/title/'+self.id+'/',
+			'target': '_blank'
+		});
+
+		if(!self.id) self.disable();
+	}
+
+});
+
+MA.ALLOCINE = new Class({
+
+	Extends: MovieAction,
+	id: null,
+
+	create: function(){
+		var self = this;
+
+		self.id = self.movie.get('identifier');
+
+		self.el = new Element('a.allocine', {
+			'title': 'Go to the Allocine page of ' + self.movie.getTitle(),
+			'href': 'http://www.dereferer.org/?http://www.allocine.fr/recherche/?q='+self.movie.getTitle(),
+			'target': '_blank'
+		});
+
+		if(!self.id) self.disable();
+	}
+
+});
+
+MA.SENSACINE = new Class({
+
+	Extends: MovieAction,
+	id: null,
+
+	create: function(){
+		var self = this;
+
+		self.id = self.movie.get('identifier');
+
+		self.el = new Element('a.sensacine', {
+			'title': 'Go to the Sensacine page of ' + self.movie.getTitle(),
+			'href': 'http://www.dereferer.org/?http://www.sensacine.com/busqueda/?q='+self.movie.getTitle(),
 			'target': '_blank'
 		});
 
@@ -491,6 +533,104 @@ MA.Edit = new Class({
 	}
 
 })
+
+MA.Status = new Class({
+
+	Extends: MovieAction,
+
+	Implements: [Chain],
+
+	create: function(){
+		var self = this;
+
+		self.el = new Element('a.status', {
+			'title': 'Change movie status (snatched, downloaded, viewed).',
+			'events': {
+				'click': self.statusMovie.bind(self)
+			}
+		});
+
+	},
+
+	statusMovie: function(e){
+		var self = this;
+		(e).preventDefault();
+
+		if(!self.options_container){
+			self.options_container = new Element('div.options').adopt(
+				new Element('div.form').adopt(
+					self.title_select = new Element('select', {
+						'name': 'title'
+					}),
+					self.status_select = new Element('select', {
+						'name': 'status'
+					}),
+					new Element('a.button.edit', {
+						'text': 'Save',
+						'events': {
+							'click': self.save.bind(self)
+						}
+					})
+				)
+			).inject(self.movie, 'top');
+
+			Array.each(self.movie.data.library.titles, function(alt){
+				new Element('option', {
+					'text': alt.title
+				}).inject(self.title_select);
+
+				if(alt['default'])
+					self.title_select.set('value', alt.title);
+			});
+
+			Status.getStatus().each(function(status){
+				new Element('option', {
+					'value': status.id ? status.id : status.data.id,
+					'text': status.label ? status.label : status.data.label
+				}).inject(self.status_select);
+
+				if(self.movie.status)
+					self.status_select.set('text', status.id ? status.id : status.data.id);
+			});
+
+		}
+
+		self.movie.slide('in', self.options_container);
+	},
+
+	save: function(e){
+                (e).preventDefault();
+                var self = this;
+
+                var movie = $(self.movie);
+
+                self.chain(
+                        function(){
+                                self.callChain();
+                        },
+                        function(){
+                                Api.request('movie.status', {
+                                        'data': {
+                                                'id': self.movie.get('id'),
+                                                'status': self.status_select.getSelected()[0].get('text').toLowerCase()
+                                        },
+                                        'onComplete': function(){
+                                                movie.set('tween', {
+                                                        'duration': 300,
+                                                        'onComplete': function(){
+                                                                self.movie.destroy()
+                                                        }
+                                                });
+                                                movie.tween('height', 0);
+                                        }
+                                });
+                        }
+                );
+
+                self.callChain();
+	}
+
+});
 
 MA.Refresh = new Class({
 

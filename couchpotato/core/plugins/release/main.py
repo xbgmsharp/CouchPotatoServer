@@ -1,15 +1,15 @@
 from couchpotato import get_session
 from couchpotato.api import addApiView
 from couchpotato.core.event import fireEvent, addEvent
-from couchpotato.core.helpers.encoding import ss
+from couchpotato.core.helpers.encoding import ss, toUnicode
 from couchpotato.core.helpers.request import getParam, jsonified
 from couchpotato.core.logger import CPLog
 from couchpotato.core.plugins.base import Plugin
 from couchpotato.core.plugins.scanner.main import Scanner
-from couchpotato.core.settings.model import File, Release as Relea, Movie
+from couchpotato.core.settings.model import File, Release as Relea, Movie, ReleaseInfo
 from sqlalchemy.sql.expression import and_, or_
 import os
-
+import random
 log = CPLog(__name__)
 
 
@@ -18,6 +18,13 @@ class Release(Plugin):
     def __init__(self):
         addEvent('release.add', self.add)
 
+        addApiView('release.add2', self.add2, docs = {
+            'desc': 'Add a release manually to a movie',
+            'params': {
+                'lib_id': {'type': 'id', 'desc': 'ID of the Library in library-table'},
+                'qua_id': {'type': 'id', 'desc': 'ID of the Quality in quality-table'}
+            }
+        })
         addApiView('release.download', self.download, docs = {
             'desc': 'Send a release manually to the downloaders',
             'params': {
@@ -28,6 +35,13 @@ class Release(Plugin):
             'desc': 'Delete releases',
             'params': {
                 'id': {'type': 'id', 'desc': 'ID of the release object in release-table'}
+            }
+        })
+        addApiView('release.status', self.status, docs = {
+            'desc': 'Change the status of release',
+            'params': {
+                'id': {'type': 'id', 'desc': 'ID of the release object in release-table'},
+                'status': {'type': 'string: done, available, snatched, deleted', 'desc': 'New status for the release'}
             }
         })
         addApiView('release.ignore', self.ignore, docs = {
@@ -90,6 +104,65 @@ class Release(Plugin):
 
         return True
 
+    def add2(self):
+        db = get_session()
+
+	rand = random.randrange(10000, 90000, 2)
+	lib_id = getParam('lib_id')
+	qua_id = getParam('qua_id')
+        name = getParam('name')
+        identifier = 'azerty12345678900'+ str(rand) + '00' + lib_id + '00' + qua_id
+
+        if not lib_id or not qua_id or not name:
+               return jsonified({
+                      'success': False,
+               })
+	
+        # Add movie
+        done_status = fireEvent('status.get', 'done', single = True)
+	snatched_status = fireEvent('status.get', 'snatched', single = True)
+        movie = db.query(Movie).filter_by(library_id = lib_id).first()
+        if not movie:
+            log.debug('Update status to snatched')
+            movie = Movie(
+                library_id = lib_id,
+                profile_id = 0,
+                status_id = snatched_status.get('id')
+            )
+            db.add(movie)
+            db.commit()
+
+        # Add Release
+        rls = db.query(Relea).filter_by(identifier = identifier).first()
+        if not rls:
+            log.debug('Add a %s release for movie %s.', (snatched_status.get('label'), movie.id))
+            rls = Relea(
+                identifier = identifier,
+                movie = movie,
+                quality_id = qua_id,
+                status_id = snatched_status.get('id')
+            )
+            db.add(rls)
+            db.commit()
+
+        # Add ReleaseInfo
+        log.debug('Add a %s release info for movie %s.', (snatched_status.get('label'), movie.id))
+        infos = {'name': 'azerty', 'type': 'nzb', 'size': '700', 'description': '', 'url': '', 'age': '1', 'score': '100'}
+        infos['name'] = name
+        for key, value in infos.items():
+            rls_info = ReleaseInfo(
+                identifier = key,
+                value = toUnicode(value)
+            )
+            rls.info.append(rls_info)
+        db.commit()
+
+        log.info('New %s release added for movie %s.', (snatched_status.get('label'), movie.id))
+
+        return jsonified({
+            'success': True,
+            'identifier': identifier,
+        })
 
     def saveFile(self, filepath, type = 'unknown', include_media_info = False):
 
@@ -151,6 +224,30 @@ class Release(Plugin):
             available_status = fireEvent('status.get', 'available', single = True)
             rel.status_id = available_status.get('id') if rel.status_id is ignored_status.get('id') else ignored_status.get('id')
             db.commit()
+
+        return jsonified({
+            'success': True
+        })
+
+    def status(self):
+
+        db = get_session()
+        id = getParam('id')
+        status = getParam('status')
+
+        rel = db.query(Relea).filter_by(id = id).first()
+        if rel:
+	    if  status == 'deleted':
+                log.debug('Delete release for release %s', id)
+                self.delete(id)
+            elif status == 'ignored':
+                log.debug('Ignore release for release %s', id)
+                self.ignore(id)
+            else:
+                new_status = fireEvent('status.get', status, single = True)
+                rel.status_id = new_status.get('id')
+                log.debug('Changing status to %s for release %s', (new_status.get('label'), id))
+                db.commit()
 
         return jsonified({
             'success': True
