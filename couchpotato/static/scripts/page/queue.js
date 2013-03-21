@@ -3,7 +3,7 @@ Page.Queue = new Class({
 	Extends: PageBase,
 
 	name: 'queue',
-	title: 'Do stuff to your existing movies!',
+	title: 'Movie waiting!',
 
 	indexAction: function(param){
 		var self = this;

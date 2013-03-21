@@ -107,9 +107,9 @@ class Release(Plugin):
     def add2(self):
         db = get_session()
 
-	rand = random.randrange(10000, 90000, 2)
-	lib_id = getParam('lib_id')
-	qua_id = getParam('qua_id')
+        rand = random.randrange(10000, 90000, 2)
+        lib_id = getParam('lib_id')
+        qua_id = getParam('qua_id')
         name = getParam('name')
         identifier = 'azerty12345678900'+ str(rand) + '00' + lib_id + '00' + qua_id
 
@@ -120,7 +120,7 @@ class Release(Plugin):
 	
         # Add movie
         done_status = fireEvent('status.get', 'done', single = True)
-	snatched_status = fireEvent('status.get', 'snatched', single = True)
+        snatched_status = fireEvent('status.get', 'snatched', single = True)
         movie = db.query(Movie).filter_by(library_id = lib_id).first()
         if not movie:
             log.debug('Update status to snatched')
@@ -237,7 +237,7 @@ class Release(Plugin):
 
         rel = db.query(Relea).filter_by(id = id).first()
         if rel:
-	    if  status == 'deleted':
+            if  status == 'deleted':
                 log.debug('Delete release for release %s', id)
                 self.delete(id)
             elif status == 'ignored':
