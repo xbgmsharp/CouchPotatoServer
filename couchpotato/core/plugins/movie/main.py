@@ -616,6 +616,9 @@ class MoviePlugin(Plugin):
             log.debug('Changing status to %s for movie %s', (new_status.get('label'), movie.library.titles[0].title))
             movie.status_id = new_status.get('id')
             db.commit()
+            for rel in movie.releases:
+                log.debug('Changing status to %s for release %s', (new_status.get('label'), rel.id))
+                fireEvent('release.status', rel.id, status, single = True)
 
         #db.close()
 

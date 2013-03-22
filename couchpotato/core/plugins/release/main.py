@@ -37,7 +37,7 @@ class Release(Plugin):
                 'id': {'type': 'id', 'desc': 'ID of the release object in release-table'}
             }
         })
-        addApiView('release.status', self.status, docs = {
+        addApiView('release.status', self.statusView, docs = {
             'desc': 'Change the status of release',
             'params': {
                 'id': {'type': 'id', 'desc': 'ID of the release object in release-table'},
@@ -52,6 +52,7 @@ class Release(Plugin):
         })
 
         addEvent('release.delete', self.delete)
+        addEvent('release.status', self.status)
         addEvent('release.clean', self.clean)
 
     def add(self, group):
@@ -229,29 +230,39 @@ class Release(Plugin):
             'success': True
         })
 
-    def status(self):
+    def statusView(self):
 
-        db = get_session()
-        id = getParam('id')
+        release_id = getParam('id')
         status = getParam('status')
 
-        rel = db.query(Relea).filter_by(id = id).first()
+        return jsonified({
+            'success': self.status(release_id, status)
+        })
+
+
+    def status(self, release_id, status):
+
+        db = get_session()
+        new_status = fireEvent('status.get', status, single = True)
+        ignored_status = fireEvent('status.get', 'ignored', single = True)
+        deleted_status = fireEvent('status.get', 'deleted', single = True)
+
+        rel = db.query(Relea).filter_by(id = release_id).first()
         if rel:
-            if  status == 'deleted':
-                log.debug('Delete release for release %s', id)
-                self.delete(id)
-            elif status == 'ignored':
-                log.debug('Ignore release for release %s', id)
-                self.ignore(id)
+            if  new_status.get('id') == deleted_status.get('id'):
+                log.debug('Delete release for release %s', release_id)
+                self.delete(release_id)
+            elif new_status.get('id') == ignored_status.get('id'):
+                log.debug('Ignore release for release %s', release_id)
+                self.ignore(release_id)
             else:
-                new_status = fireEvent('status.get', status, single = True)
                 rel.status_id = new_status.get('id')
-                log.debug('Changing status to %s for release %s', (new_status.get('label'), id))
+                log.debug('Changing status to %s for release %s', (new_status.get('label'), release_id))
                 db.commit()
 
-        return jsonified({
-            'success': True
-        })
+            return True
+
+        return False
 
     def download(self):
 
