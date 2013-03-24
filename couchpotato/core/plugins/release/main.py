@@ -22,7 +22,7 @@ class Release(Plugin):
             'desc': 'Add a release manually to a movie',
             'params': {
                 'lib_id': {'type': 'id', 'desc': 'ID of the Library in library-table'},
-                'qua_id': {'type': 'id', 'desc': 'ID of the Quality in quality-table'}
+                'qua_id': {'type': 'id', 'desc': 'ID of the Quality in quality-table'},
                 'name': {'type': 'string', 'desc': 'Name of the NZB file'}
             }
         })
