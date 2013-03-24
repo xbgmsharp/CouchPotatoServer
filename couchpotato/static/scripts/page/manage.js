@@ -30,7 +30,7 @@ Page.Manage = new Class({
 				'filter': {
 					'release_status': 'done'
 				},
-				'actions': [MA.IMDB, MA.Trailer, MA.Files, MA.Readd, MA.Edit, MA.Delete, MA.Status],
+				'actions': [MA.IMDB, MA.ALLOCINE, MA.SENSACINE, MA.Trailer, MA.Files, MA.Release, MA.Readd, MA.Edit, MA.Delete, MA.Status],
 				'menu': [self.refresh_button, self.refresh_quick],
 				'on_empty_element': new Element('div.empty_manage').adopt(
 					new Element('div', {

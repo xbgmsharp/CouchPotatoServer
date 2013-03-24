@@ -23,6 +23,7 @@ class Release(Plugin):
             'params': {
                 'lib_id': {'type': 'id', 'desc': 'ID of the Library in library-table'},
                 'qua_id': {'type': 'id', 'desc': 'ID of the Quality in quality-table'}
+                'name': {'type': 'string', 'desc': 'Name of the NZB file'}
             }
         })
         addApiView('release.download', self.download, docs = {
@@ -147,7 +148,7 @@ class Release(Plugin):
             db.commit()
 
         # Add ReleaseInfo
-        log.debug('Add a %s release info for movie %s.', (snatched_status.get('label'), movie.id))
+        log.debug('Add a %s releaseinfo for movie %s.', (snatched_status.get('label'), movie.id))
         infos = {'name': 'azerty', 'type': 'nzb', 'size': '700', 'description': '', 'url': '', 'age': '1', 'score': '100'}
         infos['name'] = name
         for key, value in infos.items():

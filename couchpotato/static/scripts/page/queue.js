@@ -28,7 +28,7 @@ Page.Queue = new Class({
 			self.list = new MovieList({
 				'identifier': 'queue',
 				'status': 'snatched',
-				'actions': [MA.IMDB, MA.ALLOCINE, MA.SENSACINE, MA.Trailer, MA.Files, MA.Readd, MA.Edit, MA.Delete, MA.Status],
+				'actions': [MA.IMDB, MA.ALLOCINE, MA.SENSACINE, MA.Trailer, MA.Files, MA.Release, MA.Readd, MA.Edit, MA.Delete, MA.Status],
 				'menu': [self.refresh_button, self.refresh_quick],
 				'on_empty_element': App.createUserscriptButtons().addClass('empty_wanted')
 			});
