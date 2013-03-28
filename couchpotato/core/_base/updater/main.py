@@ -32,7 +32,8 @@ class Updater(Plugin):
         else:
             self.updater = SourceUpdater()
 
-        fireEvent('schedule.interval', 'updater.check', self.autoUpdate, hours = 6)
+        if self.conf('enable') != 0:
+           fireEvent('schedule.interval', 'updater.check', self.autoUpdate, hours = 6)
         addEvent('app.load', self.autoUpdate)
         addEvent('updater.info', self.info)
 
