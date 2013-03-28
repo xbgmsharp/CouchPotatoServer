@@ -23,7 +23,7 @@ Page.Home = new Class({
 			'identifier': 'snatched',
 			'load_more': false,
 			'view': 'list',
-			'actions': [MA.IMDB, MA.ALLOCINE, MA.SENSACINE, MA.Trailer, MA.Files, MA.Release, MA.Edit, MA.Readd, MA.Refresh, MA.Delete, MA.Status],
+			'actions': [MA.IMDB, MA.ALLOCINE, MA.SENSACINE, MA.Trailer, MA.Release, MA.Refresh, MA.Delete, MA.Status],
 			'title': 'Snatched & Available',
 			'on_empty_element': new Element('div'),
 			'filter': {
@@ -64,7 +64,7 @@ Page.Home = new Class({
 			},
 			'load_more': false,
 			'view': 'list',
-			'actions': [MA.IMDB, MA.ALLOCINE, MA.SENSACINE, MA.Trailer, MA.Edit, MA.Refresh, MA.Delete],
+			'actions': [MA.IMDB, MA.ALLOCINE, MA.SENSACINE, MA.Trailer, MA.Edit, MA.Refresh, MA.Delete, MA.Status],
 			'api_call': 'dashboard.soon'
 		});
 

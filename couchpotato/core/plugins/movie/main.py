@@ -378,6 +378,7 @@ class MoviePlugin(Plugin):
         status_active = fireEvent('status.add', 'active', single = True)
         snatched_status = fireEvent('status.add', 'snatched', single = True)
         ignored_status = fireEvent('status.add', 'ignored', single = True)
+        done_status = fireEvent('status.add', 'done', single = True)
         downloaded_status = fireEvent('status.add', 'downloaded', single = True)
 
         default_profile = fireEvent('profile.default', single = True)
@@ -405,7 +406,7 @@ class MoviePlugin(Plugin):
 
             # Clean snatched history
             for release in m.releases:
-                if release.status_id in [downloaded_status.get('id'), snatched_status.get('id')]:
+                if release.status_id in [downloaded_status.get('id'), snatched_status.get('id'), done_status.get('id')]:
                     if params.get('ignore_previous', False):
                         release.status_id = ignored_status.get('id')
                     else:
