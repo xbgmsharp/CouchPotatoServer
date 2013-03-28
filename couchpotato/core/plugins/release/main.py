@@ -240,8 +240,7 @@ class Release(Plugin):
             'success': self.status(release_id, status)
         })
 
-
-    def status(self, release_id, status):
+    def status(self, release_id, status = None):
 
         db = get_session()
         new_status = fireEvent('status.get', status, single = True)
@@ -249,16 +248,14 @@ class Release(Plugin):
         deleted_status = fireEvent('status.get', 'deleted', single = True)
 
         rel = db.query(Relea).filter_by(id = release_id).first()
-        if rel:
-            if  new_status.get('id') == deleted_status.get('id'):
-                log.debug('Delete release for release %s', release_id)
+        if rel and new_status:
+            log.debug('Changing status to %s for release %s', (new_status.get('label'), release_id))
+            if new_status.get('id') == deleted_status.get('id'):
                 self.delete(release_id)
             elif new_status.get('id') == ignored_status.get('id'):
-                log.debug('Ignore release for release %s', release_id)
                 self.ignore(release_id)
             else:
                 rel.status_id = new_status.get('id')
-                log.debug('Changing status to %s for release %s', (new_status.get('label'), release_id))
                 db.commit()
 
             return True
